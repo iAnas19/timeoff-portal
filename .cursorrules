@@ -1,0 +1,504 @@
+# ExampleHR Frontend — Cursor Rules
+
+---
+
+## 0. Guiding Principles
+
+Every rule below derives from four non-negotiable properties:
+
+1. **Correctness over speed** — optimistic UI is a UX choice, not a data commitment. The source of truth is always HCM.
+2. **Explicit over implicit** — every state, every transition, every error must be named, typed, and reachable.
+3. **Fail visibly** — silent failures are product defects. The UI must always reflect what it actually knows.
+4. **Defense in depth** — validate at every boundary: API response, component prop, config variable, user input.
+
+---
+
+## 1. TypeScript
+
+Use TypeScript with strict mode enabled. The goal is just enough type safety to catch real bugs — not type gymnastics for its own sake.
+
+- No `any`. No double casting. Avoid `as` except at a Zod-validated boundary.
+- Use `Partial<T>` and `Omit<T, K>` where they simplify things naturally — don't force them.
+- Use generics when a function genuinely works across types. One or two generics is fine. Avoid chains of nested generics.
+- For props, API request/response shapes, and service params — define and export the types. These are the contracts that matter.
+- For internal hook return types, local state shapes, and one-off utility types — inline them or skip the export. Exporting everything is noise.
+- Prefer `type` over `interface` for domain models. Easier to extend with unions.
+- Never use `object` or `{}` as a type.
+
+---
+
+## 2. Folder Structure
+
+```
+src/
+  app/                        # Next.js App Router pages — thin shells only
+    (employee)/
+    (manager)/
+    api/                      # Route handlers (mock HCM endpoints live here)
+
+  features/
+    balances/
+      components/             # Presentation only
+      containers/             # Orchestration only
+      hooks/                  # Feature-scoped custom hooks
+      services/               # API call implementations
+      store/                  # Zustand slices (UI state only)
+      schemas/                # Zod schemas for this domain
+      types/                  # Domain types
+      queryKeys/              # Query key definitions for this feature
+      constants/              # Status codes, event names, named magic values
+      utils/                  # Pure transformation functions
+    requests/
+      ...
+    approvals/
+      ...
+
+  shared/
+    api/                      # Base fetch client, interceptors, error factory
+    hooks/                    # App-wide reusable hooks
+    lib/                      # Third-party config (queryClient, zustand middleware)
+    ui/                       # Primitive design-system components
+    types/                    # Shared cross-feature types
+    constants/                # App-wide named values, feature flags, storage keys
+    schemas/                  # Shared Zod schemas (error envelope, pagination, etc.)
+    utils/                    # Pure shared utilities
+    config/                   # App config — env validation lives here
+
+  mocks/
+    handlers/                 # MSW request handlers
+    fixtures/                 # Deterministic seed data
+    scenarios/                # Named scenario builders (anniversary, silent-fail, etc.)
+
+  tests/
+    integration/
+    unit/
+```
+
+Rules:
+
+- A feature must never import from another feature directly. Route shared things through `shared/`.
+- `app/` pages must contain zero business logic. They compose containers and pass route params down.
+- `mocks/` is a first-class citizen. It ships with the same type safety as production code.
+
+---
+
+## 3. Architecture — Container / Presenter
+
+```
+Page
+ └── FeatureContainer          # queries, mutations, orchestration
+      └── FeatureView          # receives typed props, renders only
+           ├── SubComponent
+           └── SubComponent
+```
+
+- Containers own: data fetching, mutations, optimistic state, event handlers, business rules.
+- Presenters own: rendering, layout, local interaction state (open/closed dropdown, hover, etc.).
+- A presenter that calls `useQuery` or `useMutation` is a violation.
+- A container that contains more than a single return with one child is a violation.
+- Pages must never call `useQuery`, `useMutation`, or any service directly.
+
+---
+
+## 4. Config and Environment Variables
+
+All environment variables are validated once at startup in `shared/config/config.ts`. This is the only place `process.env` is ever accessed.
+
+```typescript
+// shared/config/config.ts
+import { z } from "zod";
+
+const configSchema = z.object({
+  HCM_API_URL: z.string().url(),
+  HCM_API_TIMEOUT_MS: z.coerce.number().default(8000),
+  NEXT_PUBLIC_APP_ENV: z.enum(["development", "staging", "production"]),
+});
+
+export const config = configSchema.parse(process.env);
+```
+
+- If a required variable is missing or the wrong shape, the app throws on startup — not at runtime in a component.
+- Never access `process.env.ANYTHING` outside of `config.ts`.
+- Never expose server-only variables to the client. Client-safe variables must be prefixed `NEXT_PUBLIC_`.
+- Import `config` wherever you need an env value. Never pass env values down as props.
+
+---
+
+## 5. Named Magic Values
+
+Every number, string, or duration that has a non-obvious meaning must be named at the top of its file (or in `constants/`) before use.
+
+```typescript
+// Bad
+gcTime: 0;
+refetchInterval: 30000;
+maxRetries: 3;
+
+// Good — defined at top of file or in constants/
+const NO_GARBAGE_COLLECTION = 0;
+const BALANCE_POLL_INTERVAL_MS = 30_000;
+const MAX_HCM_RETRIES = 3;
+
+gcTime: NO_GARBAGE_COLLECTION;
+refetchInterval: BALANCE_POLL_INTERVAL_MS;
+retry: MAX_HCM_RETRIES;
+```
+
+The name makes the intent clear. Anyone reading the code understands why the value is what it is, without needing a comment.
+
+This applies to: timeouts, retry counts, polling intervals, `staleTime`, `gcTime`, status codes, delay values, and any other bare number or string that carries domain meaning.
+
+---
+
+## 6. Query Keys
+
+Every feature has its own `queryKeys/` file. Query keys are never inlined or hardcoded anywhere else.
+
+```typescript
+// features/balances/queryKeys/balanceKeys.ts
+
+export const BALANCE_KEYS = {
+  all: ["balances"] as const,
+  byEmployee: (employeeId: string) =>
+    [...BALANCE_KEYS.all, employeeId] as const,
+  byEmployeeAndLocation: (employeeId: string, locationId: string) =>
+    [...BALANCE_KEYS.byEmployee(employeeId), locationId] as const,
+};
+```
+
+Usage everywhere in the codebase:
+
+```typescript
+// Good
+queryKey: BALANCE_KEYS.byEmployee(employeeId);
+
+// Bad — never do this
+queryKey: ["balances", employeeId];
+```
+
+Rules:
+
+- Keys are hierarchical so invalidating a parent automatically invalidates all children.
+- When invalidating after a mutation, use the broadest correct scope — not the most narrow.
+- `REQUEST_KEYS`, `APPROVAL_KEYS` follow the same pattern in their respective `queryKeys/` files.
+
+---
+
+## 7. State Management
+
+### Server State — TanStack Query
+
+- All remote data lives in TanStack Query. Never copy it into Zustand.
+- Every query must declare `staleTime` explicitly using a named constant. No implicit defaults.
+- Every mutation must implement `onMutate`, `onSuccess`, and `onError`.
+- Optimistic updates must snapshot the previous cache in `onMutate` and restore it in `onError`.
+- On `onSuccess`, always invalidate or surgically update the cache. Never assume HCM echoes back the correct value.
+
+### Client UI State — Zustand
+
+- Zustand is only for UI state: panel open/closed, active tab, confirmation modal visibility.
+- Never store balance values, request data, or any server-derived data in Zustand.
+- Every Zustand store must be scoped to its feature. No global mega-store.
+- Stores use the `immer` middleware for nested updates and `devtools` middleware in development.
+
+### Derived State
+
+- Computed values are derived, not stored.
+- Example: `availableBalance = confirmedBalance - pendingDeductions` lives in a `useMemo`, never in state.
+
+---
+
+## 8. Optimistic Update Contract
+
+Every mutation that touches a balance or request follows this pattern exactly:
+
+```typescript
+const OPTIMISTIC_ROLLBACK_QUERY = BALANCE_KEYS.byEmployee(employeeId);
+
+useMutation({
+  mutationFn: submitRequest,
+
+  onMutate: async (variables) => {
+    await queryClient.cancelQueries({ queryKey: OPTIMISTIC_ROLLBACK_QUERY });
+    const previousBalance = queryClient.getQueryData(OPTIMISTIC_ROLLBACK_QUERY);
+
+    queryClient.setQueryData(OPTIMISTIC_ROLLBACK_QUERY, (old) =>
+      applyOptimisticDeduction(old, variables),
+    );
+
+    return { previousBalance };
+  },
+
+  onError: (_err, _variables, context) => {
+    queryClient.setQueryData(
+      OPTIMISTIC_ROLLBACK_QUERY,
+      context?.previousBalance,
+    );
+  },
+
+  onSettled: () => {
+    // Refetch is mandatory — this is what reconciles the UI against HCM truth
+    queryClient.invalidateQueries({ queryKey: OPTIMISTIC_ROLLBACK_QUERY });
+  },
+});
+```
+
+- `onSettled` is the reconciliation step. It is not optional.
+- Never show a permanent "approved" state until `onSettled` completes and the cache is consistent.
+- If the refetched value contradicts the optimistic prediction, the UI surfaces a non-blocking notice. It never silently overwrites.
+
+---
+
+## 9. Reconciliation States
+
+The UI must distinguish and render all of these states. No two states may be silently collapsed into one:
+
+```typescript
+// features/balances/types/balance.types.ts
+
+type BalanceDisplayStatus =
+  | "idle"
+  | "loading"
+  | "stale" // data is present but may be outdated
+  | "optimistic-pending" // user action in flight, showing predicted value
+  | "optimistic-rolled-back" // mutation failed, original value restored
+  | "hcm-rejected" // HCM returned an explicit denial
+  | "hcm-silent-conflict" // HCM said OK but reconciliation found a mismatch
+  | "refreshed-mid-session" // background poll changed the value while user is active
+  | "error"
+  | "success";
+```
+
+- Every component rendering a balance accepts and handles the relevant statuses.
+- `refreshed-mid-session` shows a non-intrusive inline banner — not a silent overwrite.
+- `hcm-silent-conflict` warns the user to verify before resubmitting.
+- `optimistic-rolled-back` is visually distinct from `error`. The data is back to ground truth — the user just needs to know their action did not land.
+
+---
+
+## 10. API Layer
+
+### Base Client
+
+All HTTP calls go through `shared/api/client.ts`. No raw `fetch()` calls anywhere else in the codebase.
+
+The base client handles:
+
+- Attaching `Content-Type` and a per-request correlation ID (`x-request-id`)
+- Auth headers
+- Request timeout (default value comes from `config.HCM_API_TIMEOUT_MS`, defined as `const HCM_REQUEST_TIMEOUT_MS = config.HCM_API_TIMEOUT_MS`)
+- Normalizing all errors through the shared error factory before throwing
+
+### Services
+
+- One file per domain: `balance.service.ts`, `request.service.ts`, `approval.service.ts`.
+- Services export plain async functions. They never call hooks.
+- Every response is validated with Zod before being returned. A response that fails schema validation is treated as an error.
+- Services throw typed `HCMError` objects via the shared error factory. Never throw raw `Error`.
+- Never log raw API responses or sensitive fields in services.
+
+### Error Model
+
+```typescript
+// shared/types/error.types.ts
+
+type HCMErrorCode =
+  | "INSUFFICIENT_BALANCE"
+  | "INVALID_DIMENSION"
+  | "CONFLICT"
+  | "SILENT_FAILURE" // HCM said 200 but reconciliation found no change
+  | "TIMEOUT"
+  | "NETWORK"
+  | "UNKNOWN";
+
+type HCMError = {
+  code: HCMErrorCode;
+  message: string;
+  requestId: string;
+  retryable: boolean;
+  timestamp: string;
+};
+```
+
+- `SILENT_FAILURE` is a first-class error. It is produced during `onSettled` when the server returned success but the refreshed balance does not reflect the expected change.
+- `retryable: true` allows TanStack Query to retry automatically. `retryable: false` surfaces immediately to the UI.
+
+---
+
+## 11. Zod Schemas
+
+- Every API response shape has a Zod schema.
+- Schemas live in `features/<domain>/schemas/` or `shared/schemas/` if used across features.
+- Infer TypeScript types from schemas with `z.infer<typeof schema>` — never write the type separately.
+- Use `.strict()` on object schemas so unexpected HCM fields are caught immediately, not silently swallowed.
+- Schemas cover both success and error response shapes.
+
+---
+
+## 12. Mock HCM Endpoints
+
+Mocks are not throwaway code. They carry the same type safety and behavioral completeness as production code.
+
+### Required endpoints
+
+```
+GET  /api/hcm/balances/batch
+GET  /api/hcm/balances/:employeeId/:locationId
+POST /api/hcm/balances/:employeeId/:locationId
+POST /api/hcm/requests
+PATCH /api/hcm/requests/:requestId
+POST /api/hcm/simulate/anniversary       # fires anniversary bonus for an employee
+POST /api/hcm/simulate/silent-fail       # next write returns 200 but does not commit
+POST /api/hcm/simulate/conflict          # next write returns 409
+POST /api/hcm/simulate/slow              # next request delays 6–12 seconds
+```
+
+### Behavior
+
+- **Anniversary bonus**: balance increments server-side. The next reconciliation poll must detect the change and trigger `refreshed-mid-session`.
+- **Silent fail**: write returns HTTP 200 with a plausible body. The subsequent GET returns the original unchanged balance. Indistinguishable from a real success at the HTTP layer — the only way to detect it is reconciliation.
+- **Conflict**: returns HTTP 409 with an `HCMError` body using the `CONFLICT` code.
+- **Slow**: random delay of 6–12 seconds. Tests timeout handling and loading states.
+- Seed data is deterministic — fixed employee IDs, location IDs, and starting balances. Randomness is scenario-specific and explicitly triggered.
+- Mock handlers validate their own request bodies with the shared Zod schemas.
+
+---
+
+## 13. Storybook
+
+Every meaningful UI state has a story. "Meaningful" means a product manager could look at it and make a decision.
+
+### Required stories — BalanceCard
+
+```
+Loading / Empty / Success / Stale / OptimisticPending /
+OptimisticRolledBack / HCMRejected / HCMSilentConflict /
+RefreshedMidSession / Error
+```
+
+### Required stories — RequestForm
+
+```
+Idle / Validating / Submitting / SubmitSuccess /
+SubmitRolledBack / SubmitHCMRejected / SubmitSilentConflict
+```
+
+### Required stories — ManagerApprovalCard
+
+```
+PendingWithFreshBalance / PendingWithStaleBalance / Approving /
+Approved / Denied / ConflictOnApprove
+```
+
+Rules:
+
+- Stories use MSW handlers via `msw-storybook-addon`. No hardcoded prop data for async states.
+- Every story has a `play` function that exercises at least one interaction.
+- If a state has no story, it does not exist as far as the team is concerned.
+- Story files live colocated with the component: `BalanceCard.stories.tsx` next to `BalanceCard.tsx`.
+
+---
+
+## 14. Testing Strategy
+
+| Layer                       | Tool                        | Guards                                                          |
+| --------------------------- | --------------------------- | --------------------------------------------------------------- |
+| Pure utils / business logic | Vitest                      | Balance calculations, reconciliation logic, error mapping       |
+| Service layer               | Vitest + MSW                | API contract, Zod validation, typed error output                |
+| Container hooks             | Vitest + RTL                | Optimistic flow, rollback, cache reconciliation                 |
+| Component rendering         | Storybook interaction tests | All UI states, user interactions, accessibility                 |
+| End-to-end flows            | Playwright                  | Submit → approve, anniversary mid-session, silent fail recovery |
+
+Rules:
+
+- Test observable behavior, not implementation details.
+- Every `HCMErrorCode` variant has a test that exercises it through the UI.
+- The silent failure scenario has a dedicated integration test. It is the hardest failure mode and the most likely to regress silently.
+- Tests never share mutable state. Each test resets MSW handlers and the query cache independently.
+- Line coverage is a floor, not a goal. Behavioral coverage of the failure matrix matters more.
+
+---
+
+## 15. Security
+
+### Config and Secrets
+
+- `config.ts` is the only file that reads `process.env`. If it is not in `config.ts`, it does not exist.
+- Server-only config values never reach the client bundle. `NEXT_PUBLIC_` prefix is the gate.
+- The app must throw at startup if required config is missing — not fail silently later.
+
+### Route Handlers
+
+- Every route handler authenticates the request before doing anything else.
+- Request bodies are validated with Zod. Invalid bodies return 400, nothing else.
+- Internal errors are logged server-side. The client receives only a sanitized `HCMError` envelope — never a stack trace.
+- Mutation endpoints have rate limiting applied.
+- CORS is explicitly configured. No wildcard origins in staging or production.
+
+### Client
+
+- Auth tokens are never stored in `localStorage`. Use `httpOnly` cookies or in-memory with a refresh mechanism.
+- Employee IDs and balance values never appear in URL query params.
+- No console logging of user data, balance values, or employee IDs in production. Guard with an environment check.
+- User-facing strings that include employee data are sanitized before render. No raw HTML injection.
+
+### Dependencies
+
+- Pin all production dependency versions in `package.json`. No `^` or `~`.
+- `npm audit` runs in CI. High-severity vulnerabilities block merges.
+
+---
+
+## 16. Polling and Background Reconciliation
+
+- The batch endpoint is called once on initial hydration only.
+- Per-cell real-time reads run on a polling interval (value: `BALANCE_POLL_INTERVAL_MS`, default 30 seconds).
+- Polling pauses when the tab is not focused (`refetchIntervalInBackground: false`).
+- When a background poll returns a different value AND an optimistic mutation is in flight: the new value is held in a reconciliation buffer. It does not overwrite the optimistic value until the mutation settles.
+- After the mutation settles, the buffer is flushed and the final server value is applied.
+- This buffered state is what triggers the `refreshed-mid-session` status.
+
+---
+
+## 17. Code Generation Order
+
+Before writing any implementation, complete these steps in order. Never skip ahead to UI:
+
+```
+1. Define domain types and discriminated unions
+2. Define Zod schemas — infer TypeScript types from them
+3. Define named constants, query keys, and error codes
+4. Define service function signatures (input types, output types — no body yet)
+5. Map out state transitions for each user flow
+6. Implement mock HCM handlers
+7. Implement services
+8. Implement custom hooks
+9. Implement containers
+10. Implement presenters / components
+11. Write Storybook stories
+12. Write tests
+```
+
+---
+
+## 18. Naming Conventions
+
+```
+Components         PascalCase             BalanceCard, RequestForm
+Hooks              camelCase, use prefix  useBalanceReconciliation, useOptimisticRequest
+Services           camelCase, verb-noun   fetchBalance, submitTimeOffRequest
+Utils              camelCase, descriptive calculateAvailableBalance, applyOptimisticDeduction
+Types              PascalCase             BalanceDisplayStatus, HCMError
+Constants          SCREAMING_SNAKE        BALANCE_POLL_INTERVAL_MS, NO_GARBAGE_COLLECTION
+Query key objects  SCREAMING_SNAKE        BALANCE_KEYS, REQUEST_KEYS
+Story names        Component/State        "BalanceCard/OptimisticRolledBack"
+Test names         behavior sentence      "rolls back optimistic update when HCM returns silent failure"
+```
+
+---
+
+## 19. Comments
+
+Avoid comments that describe what the code does — the code should do that itself through good naming.
+
+Add a short comment only when the code does something that looks wrong but is intentional, or when the why is not obvious from reading the line. Reconciliation logic, buffer flushing order, and mutation cancel-before-update are good candidates. Everything else: name it better instead of commenting it.
