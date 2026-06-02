@@ -47,4 +47,4 @@ cp .env.example .env.local   # adjust if needed
 
 ## Progress
 
-See checkboxes in `PHASES.md`. **Phase 0** (TRD) and **Phase 1** (scaffold) are complete.
+See checkboxes in `PHASES.md`. **Phases 0–2** are complete.

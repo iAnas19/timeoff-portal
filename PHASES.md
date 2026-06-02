@@ -36,7 +36,7 @@ Copy this block and update after each phase:
 ```
 [x] Phase 0 — TRD
 [x] Phase 1 — Scaffold & toolchain
-[ ] Phase 2 — Domain contracts (types, schemas, keys, constants)
+[x] Phase 2 — Domain contracts (types, schemas, keys, constants)
 [ ] Phase 3 — Mock HCM (Next.js routes + MSW + fixtures)
 [ ] Phase 4 — Shared platform (config, client, errors, Query, UI primitives)
 [ ] Phase 5 — Balances feature (employee view foundation)
