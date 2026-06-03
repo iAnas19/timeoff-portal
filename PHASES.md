@@ -39,9 +39,9 @@ Copy this block and update after each phase:
 [x] Phase 2 — Domain contracts (types, schemas, keys, constants)
 [x] Phase 3 — Mock HCM (Next.js routes + MSW + fixtures)
 [x] Phase 4 — Shared platform (config, client, errors, Query, UI primitives)
-[ ] Phase 5 — Balances feature (employee view foundation)
-[ ] Phase 6 — Requests feature (employee submit flow)
-[ ] Phase 7 — Approvals feature (manager view) + Storybook matrix
+[x] Phase 5 — Balances feature (employee view foundation)
+[x] Phase 6 — Requests feature (employee submit flow)
+[x] Phase 7 — Approvals feature (manager view) + Storybook matrix
 [ ] Phase 8 — Test suite (Vitest, RTL, Storybook plays, Playwright)
 [ ] Phase 9 — CI, coverage proof, Storybook deploy, README
 ```
