@@ -45,6 +45,18 @@ cp .env.example .env.local   # adjust if needed
 | `/employee` | Employee view (Phase 5–6) |
 | `/manager` | Manager view (Phase 7) |
 
+## Mock HCM (Phase 3)
+
+All `/api/hcm/*` routes require header **`x-mock-auth: demo`**.
+
+Example:
+
+```bash
+curl -H "x-mock-auth: demo" http://localhost:3000/api/hcm/balances/batch
+```
+
+Simulate scenarios: `POST /api/hcm/simulate/anniversary`, `silent-fail`, `conflict`, `slow`.
+
 ## Progress
 
-See checkboxes in `PHASES.md`. **Phases 0–2** are complete.
+See checkboxes in `PHASES.md`. **Phases 0–3** are complete.
