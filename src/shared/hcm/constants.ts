@@ -1,13 +1,16 @@
 /** Polling & cache */
 export const BALANCE_POLL_INTERVAL_MS = 30_000;
 export const BALANCE_BATCH_STALE_TIME_MS = 60_000;
-export const BALANCE_CELL_STALE_TIME_MS = 0;
+// Match the poll cadence: a cell stays "fresh" between polls, so routine refetches
+// don't flip the card to a stale state. Explicit invalidation (reconciliation)
+// ignores staleTime, so correctness is unaffected.
+export const BALANCE_CELL_STALE_TIME_MS = BALANCE_POLL_INTERVAL_MS;
 export const REQUEST_LIST_STALE_TIME_MS = 15_000;
 export const NO_GARBAGE_COLLECTION = 0;
 export const MAX_HCM_RETRIES = 3;
 
-/** Request form limits */
-export const MIN_REQUEST_DAYS = 0.5;
+/** Request form limits — whole days, derived from an inclusive date range */
+export const MIN_REQUEST_DAYS = 1;
 export const MAX_REQUEST_DAYS = 365;
 
 /** Balance card UI states */

@@ -6,11 +6,10 @@ export const BALANCE_KEYS = {
     [...BALANCE_KEYS.all, employeeId] as const,
   byEmployeeAndLocation: (employeeId: string, locationId: string) =>
     [...BALANCE_KEYS.byEmployee(employeeId), locationId] as const,
+  // Overlays live OUTSIDE the "balances" tree on purpose: invalidating a balance
+  // key must never wipe a rolled-back / silent-conflict / refreshed banner.
   overlay: (employeeId: string, locationId: string) =>
-    [
-      ...BALANCE_KEYS.byEmployeeAndLocation(employeeId, locationId),
-      "overlay",
-    ] as const,
+    ["balance-overlay", employeeId, locationId] as const,
 };
 
 export const REQUEST_KEYS = {

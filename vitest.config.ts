@@ -11,7 +11,7 @@ export default defineConfig({
     pool: "threads",
     env: {
       HCM_API_URL: "http://localhost:3000",
-      HCM_API_TIMEOUT_MS: "8000",
+      HCM_API_TIMEOUT_MS: "2000",
       NEXT_PUBLIC_APP_ENV: "development",
     },
   },

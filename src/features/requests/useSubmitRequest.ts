@@ -2,10 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
-import {
-  applySubmitOptimisticUpdate,
-  setBalanceOverlay,
-} from "@/features/balances/useBalances";
+import { setBalanceOverlay } from "@/features/balances/useBalances";
 import { fetchEmployeeBalances } from "@/features/balances/balance.service";
 import { balancesAreEqual } from "@/features/balances/balance.utils";
 import { submitTimeOffRequest } from "@/features/requests/request.service";
@@ -26,9 +23,7 @@ import {
 import type { RequestFormStatus } from "@/shared/hcm/constants";
 
 type SubmitContext = {
-  previousEmployee: unknown;
   previousCell: BalanceCell | undefined;
-  employeeKey: ReturnType<typeof BALANCE_KEYS.byEmployee>;
   cellKey: ReturnType<typeof BALANCE_KEYS.byEmployeeAndLocation>;
 };
 
@@ -48,21 +43,31 @@ export function useSubmitRequest(employeeId: string) {
   const mutation = useMutation({
     mutationKey: MUTATION_KEYS.submitRequest,
     mutationFn: submitTimeOffRequest,
-    onMutate: async (variables) => {
-      await queryClient.cancelQueries({
-        queryKey: BALANCE_KEYS.byEmployee(variables.employeeId),
-      });
+    onMutate: async (variables): Promise<SubmitContext> => {
+      // Snapshot the pre-mutation cell so onSettled can reconcile against it.
+      // We do NOT write the optimistic value into the cache — the deduction is
+      // derived in useBalances from the pending mutation, so a concurrent poll
+      // can never clobber it.
+      const cellKey = BALANCE_KEYS.byEmployeeAndLocation(
+        variables.employeeId,
+        variables.locationId,
+      );
+      await queryClient.cancelQueries({ queryKey: cellKey });
 
-      return applySubmitOptimisticUpdate(queryClient, variables);
+      // Clean slate: drop any banner from a prior attempt so a retry starts fresh.
+      setBalanceOverlay(
+        queryClient,
+        variables.employeeId,
+        variables.locationId,
+        null,
+      );
+
+      return {
+        previousCell: queryClient.getQueryData<BalanceCell>(cellKey),
+        cellKey,
+      };
     },
-    onError: (error, variables, context) => {
-      if (context) {
-        queryClient.setQueryData(context.employeeKey, context.previousEmployee);
-        if (context.previousCell) {
-          queryClient.setQueryData(context.cellKey, context.previousCell);
-        }
-      }
-
+    onError: (error, variables) => {
       setBalanceOverlay(
         queryClient,
         variables.employeeId,

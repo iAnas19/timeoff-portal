@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
+import {
+  calculateAvailableBalance,
+  countInclusiveDays,
+} from "@/features/balances/balance.utils";
 import { useSubmitRequest } from "@/features/requests/useSubmitRequest";
 import { REQUEST_FORM_STATUS } from "@/shared/hcm/constants";
 import { Alert, Banner, Button, Card, Spinner } from "@/shared/ui";
@@ -11,7 +15,6 @@ export type RequestFormViewProps = {
   locations: BalanceCell[];
   formStatus: RequestFormStatus;
   statusMessage?: string;
-  minDays: number;
   maxDays: number;
   isSubmitting: boolean;
   onSubmit: (input: {
@@ -23,40 +26,132 @@ export type RequestFormViewProps = {
   onReset: () => void;
 };
 
+const TERMINAL_STATUSES: RequestFormStatus[] = [
+  REQUEST_FORM_STATUS.SUBMIT_SUCCESS,
+  REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK,
+  REQUEST_FORM_STATUS.SUBMIT_HCM_REJECTED,
+  REQUEST_FORM_STATUS.SUBMIT_SILENT_CONFLICT,
+];
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+type LocationOption = BalanceCell & { available: number };
+
 export function RequestFormView({
   locations,
   formStatus,
   statusMessage,
-  minDays,
   maxDays,
   isSubmitting,
   onSubmit,
   onReset,
 }: RequestFormViewProps) {
-  const [locationId, setLocationId] = useState(locations[0]?.locationId ?? "");
-  const [days, setDays] = useState("1");
-  const [startDate, setStartDate] = useState("2026-08-01");
-  const [endDate, setEndDate] = useState("2026-08-01");
+  const today = todayIso();
 
-  const disabled =
+  const options = useMemo<LocationOption[]>(
+    () =>
+      locations.map((cell) => ({
+        ...cell,
+        available: calculateAvailableBalance(
+          cell.confirmedBalance,
+          cell.pendingDeductions,
+        ),
+      })),
+    [locations],
+  );
+
+  const firstAvailable = options.find((option) => option.available > 0);
+  const allExhausted = options.length > 0 && !firstAvailable;
+
+  const [pickedLocationId, setPickedLocationId] = useState("");
+  const [startDate, setStartDate] = useState(today);
+  const [endDate, setEndDate] = useState(today);
+
+  // Derive the effective location instead of syncing it in an effect: fall back
+  // to the first selectable location until the user explicitly picks one, and
+  // drop a picked location that is no longer selectable (balance changed).
+  const locationId = options.some(
+    (option) => option.locationId === pickedLocationId && option.available > 0,
+  )
+    ? pickedLocationId
+    : (firstAvailable?.locationId ?? "");
+
+  const selected = options.find((option) => option.locationId === locationId);
+  const requestedDays = countInclusiveDays(startDate, endDate);
+  const available = selected?.available ?? 0;
+  const remainingAfter = available - requestedDays;
+
+  const validationError = useMemo<string | null>(() => {
+    if (allExhausted) {
+      return "No balance is available to request against right now.";
+    }
+    if (!locationId) {
+      return "Select a location.";
+    }
+    if (!startDate || !endDate) {
+      return "Pick a start and end date.";
+    }
+    if (countInclusiveDays(startDate, endDate) === 0) {
+      return "End date can’t be before the start date.";
+    }
+    if (startDate < today) {
+      return "Start date can’t be in the past.";
+    }
+    if (requestedDays > maxDays) {
+      return `A single request can’t exceed ${maxDays} days.`;
+    }
+    if (requestedDays > available) {
+      return `Only ${available} day${available === 1 ? "" : "s"} available at ${selected?.locationName}.`;
+    }
+    return null;
+  }, [
+    allExhausted,
+    available,
+    endDate,
+    locationId,
+    maxDays,
+    requestedDays,
+    selected?.locationName,
+    startDate,
+    today,
+  ]);
+
+  const busy =
     isSubmitting ||
     formStatus === REQUEST_FORM_STATUS.SUBMITTING ||
-    formStatus === REQUEST_FORM_STATUS.VALIDATING ||
-    locations.length === 0;
+    formStatus === REQUEST_FORM_STATUS.VALIDATING;
+  const disabled = busy || allExhausted || options.length === 0;
+
+  // Editing after a finished attempt clears the previous result banner.
+  function clearTerminalBanner() {
+    if (TERMINAL_STATUSES.includes(formStatus)) {
+      onReset();
+    }
+  }
+
+  function handleSubmit(event: FormEvent) {
+    event.preventDefault();
+    if (validationError) {
+      return;
+    }
+    onSubmit({ locationId, days: requestedDays, startDate, endDate });
+  }
 
   return (
     <Card className="request-form">
       <h2 className="section-title">Request time off</h2>
 
       {formStatus === REQUEST_FORM_STATUS.SUBMIT_SUCCESS && statusMessage ? (
-        <Banner className="form-banner form-banner-success">{statusMessage}</Banner>
+        <Banner className="form-banner form-banner-success">
+          {statusMessage}
+        </Banner>
       ) : null}
 
-      {formStatus === REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK && statusMessage ? (
-        <Alert className="form-banner">{statusMessage}</Alert>
-      ) : null}
-
-      {formStatus === REQUEST_FORM_STATUS.SUBMIT_HCM_REJECTED && statusMessage ? (
+      {(formStatus === REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK ||
+        formStatus === REQUEST_FORM_STATUS.SUBMIT_HCM_REJECTED) &&
+      statusMessage ? (
         <Alert className="form-banner">{statusMessage}</Alert>
       ) : null}
 
@@ -65,98 +160,113 @@ export function RequestFormView({
         <Banner className="form-banner form-banner-warn">{statusMessage}</Banner>
       ) : null}
 
-      <form
-        className="form-grid"
-        onSubmit={(event) => {
-          event.preventDefault();
-          onSubmit({
-            locationId,
-            days: Number(days),
-            startDate,
-            endDate,
-          });
-        }}
-      >
-        <label className="form-field">
-          <span>Location</span>
-          <select
-            value={locationId}
-            onChange={(event) => setLocationId(event.target.value)}
-            disabled={disabled}
-          >
-            {locations.map((location) => (
-              <option key={location.locationId} value={location.locationId}>
-                {location.locationName}
-              </option>
-            ))}
-          </select>
-        </label>
+      {allExhausted ? (
+        <p className="empty-state">
+          Every location is fully booked — no balance left to request against.
+        </p>
+      ) : (
+        <form className="form-grid" onSubmit={handleSubmit}>
+          <label className="form-field">
+            <span>Location</span>
+            <select
+              value={locationId}
+              onChange={(event) => {
+                clearTerminalBanner();
+                setPickedLocationId(event.target.value);
+              }}
+              disabled={disabled}
+            >
+              {options.map((option) => (
+                <option
+                  key={option.locationId}
+                  value={option.locationId}
+                  disabled={option.available <= 0}
+                >
+                  {option.locationName} —{" "}
+                  {option.available > 0
+                    ? `${option.available} day${option.available === 1 ? "" : "s"} available`
+                    : "exhausted"}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label className="form-field">
-          <span>Days ({minDays}–{maxDays})</span>
-          <input
-            type="number"
-            min={minDays}
-            max={maxDays}
-            step="0.5"
-            value={days}
-            onChange={(event) => setDays(event.target.value)}
-            disabled={disabled}
-          />
-        </label>
+          <div className="form-row">
+            <label className="form-field">
+              <span>First day off</span>
+              <input
+                type="date"
+                value={startDate}
+                min={today}
+                onChange={(event) => {
+                  clearTerminalBanner();
+                  const next = event.target.value;
+                  setStartDate(next);
+                  if (endDate < next) {
+                    setEndDate(next);
+                  }
+                }}
+                disabled={disabled}
+              />
+            </label>
 
-        <label className="form-field">
-          <span>Start date</span>
-          <input
-            type="date"
-            value={startDate}
-            onChange={(event) => setStartDate(event.target.value)}
-            disabled={disabled}
-          />
-        </label>
+            <label className="form-field">
+              <span>Last day off</span>
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || today}
+                onChange={(event) => {
+                  clearTerminalBanner();
+                  setEndDate(event.target.value);
+                }}
+                disabled={disabled}
+              />
+            </label>
+          </div>
 
-        <label className="form-field">
-          <span>End date</span>
-          <input
-            type="date"
-            value={endDate}
-            onChange={(event) => setEndDate(event.target.value)}
-            disabled={disabled}
-          />
-        </label>
-
-        {formStatus === REQUEST_FORM_STATUS.VALIDATING ? (
-          <p className="form-status">
-            <Spinner /> Validating…
+          <p className="form-summary" aria-live="polite">
+            {requestedDays > 0 ? (
+              <>
+                Requesting <strong>{requestedDays}</strong> day
+                {requestedDays === 1 ? "" : "s"}
+                {selected ? (
+                  <>
+                    {" · "}
+                    {remainingAfter >= 0
+                      ? `${remainingAfter} left after this`
+                      : `${available} available`}
+                  </>
+                ) : null}
+              </>
+            ) : (
+              "Choose your dates to see how many days this uses."
+            )}
           </p>
-        ) : null}
 
-        {formStatus === REQUEST_FORM_STATUS.SUBMITTING ? (
-          <p className="form-status">
-            <Spinner /> Submitting…
-          </p>
-        ) : null}
+          {validationError && !busy ? (
+            <p className="form-validation">{validationError}</p>
+          ) : null}
 
-        {statusMessage &&
-        formStatus === REQUEST_FORM_STATUS.IDLE &&
-        !isSubmitting ? (
-          <Alert className="form-inline-error">{statusMessage}</Alert>
-        ) : null}
+          {busy ? (
+            <p className="form-status">
+              <Spinner />{" "}
+              {formStatus === REQUEST_FORM_STATUS.VALIDATING
+                ? "Checking…"
+                : "Submitting…"}
+            </p>
+          ) : null}
 
-        <div className="form-actions">
-          <Button type="submit" disabled={disabled}>
-            Submit request
-          </Button>
-          {(formStatus === REQUEST_FORM_STATUS.SUBMIT_SUCCESS ||
-            formStatus === REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK ||
-            formStatus === REQUEST_FORM_STATUS.SUBMIT_HCM_REJECTED ||
-            formStatus === REQUEST_FORM_STATUS.SUBMIT_SILENT_CONFLICT) && (
-            <Button type="button" variant="secondary" onClick={onReset}>
-              New request
+          <div className="form-actions">
+            <Button
+              type="submit"
+              disabled={disabled || validationError !== null}
+            >
+              Submit request
             </Button>
-          )}
-        </div>
-      </form>
+          </div>
+        </form>
+      )}
     </Card>
   );
 }
@@ -175,7 +285,6 @@ export default function RequestFormContainer({
     submit,
     resetForm,
     isSubmitting,
-    minDays,
     maxDays,
   } = useSubmitRequest(employeeId);
 
@@ -184,7 +293,6 @@ export default function RequestFormContainer({
       locations={locations}
       formStatus={formStatus}
       statusMessage={statusMessage}
-      minDays={minDays}
       maxDays={maxDays}
       isSubmitting={isSubmitting}
       onSubmit={submit}

@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm run *)",
+      "Bash(npx vitest *)",
+      "Bash(cd /c/Anas/timeoff-portal)",
+      "Bash([ -f \"$HOME/.claude/projects/c--Anas-timeoff-portal/memory/MEMORY.md\" ])",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/employee)",
+      "Bash(break)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/manager)",
+      "Bash(curl -s -H \"x-mock-auth: examplehr-mock\" http://localhost:3000/api/hcm/balances/batch)",
+      "Bash(curl -s http://localhost:3000/employee)"
+    ]
+  }
+}

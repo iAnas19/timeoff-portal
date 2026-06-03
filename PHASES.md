@@ -42,8 +42,19 @@ Copy this block and update after each phase:
 [x] Phase 5 — Balances feature (employee view foundation)
 [x] Phase 6 — Requests feature (employee submit flow)
 [x] Phase 7 — Approvals feature (manager view) + Storybook matrix
-[ ] Phase 8 — Test suite (Vitest, RTL, Storybook plays, Playwright)
+[~] Phase 8 — Test suite — DONE: utils, mock store, service+MSW error-mapping (every HCMErrorCode),
+              container-hook tests (useBalances reconciliation, useSubmitRequest incl. dedicated
+              silent-failure test, useApprovals). REMAINING: Storybook play as a CI test runner
+              (vitest-storybook or test-runner) and Playwright e2e (submit→approve, anniversary,
+              silent-fail recovery).
 [ ] Phase 9 — CI, coverage proof, Storybook deploy, README
+
+NOTE (architecture correction): the reconciliation "buffer" described in early phases was reworked.
+The per-cell poll is now the always-authoritative cache value; the optimistic deduction is DERIVED
+on top (composable overlay) so a poll can never clobber it. `refreshed-mid-session` fires from
+comparing each poll's confirmedBalance to the last observed value. See TRD §7 and .cursorrules §8/§16.
+Fixed along the way: perpetual-`stale` (staleTime 0 + isStale), overlay banners wiped by balance
+invalidation (overlays moved out of the "balances" key tree), and fragile timeout detection.
 ```
 
 ---

@@ -150,6 +150,25 @@ export function createRequest(input: SubmitTimeOffRequestInput): TimeOffRequest 
     fail(HCM_ERROR_CODE.CONFLICT, "Write conflict — retry later", 409);
   }
 
+  // Reject a request whose dates overlap one that is already pending or approved
+  // for this employee + location — you cannot book the same day twice.
+  const hasOverlap = requests.some(
+    (existing) =>
+      existing.employeeId === input.employeeId &&
+      existing.locationId === input.locationId &&
+      (existing.status === REQUEST_STATUS.PENDING ||
+        existing.status === REQUEST_STATUS.APPROVED) &&
+      input.startDate <= existing.endDate &&
+      existing.startDate <= input.endDate,
+  );
+  if (hasOverlap) {
+    fail(
+      HCM_ERROR_CODE.CONFLICT,
+      "A leave request already covers one or more of those dates.",
+      409,
+    );
+  }
+
   const cell = balances[index];
   if (input.days > availableDays(cell)) {
     fail(

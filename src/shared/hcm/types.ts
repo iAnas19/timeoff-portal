@@ -38,12 +38,6 @@ export type SilentFailureCheckInput = {
   actualConfirmedBalance: number;
 };
 
-export type PollBufferCheckInput = {
-  isMutationPending: boolean;
-  polledConfirmedBalance: number;
-  displayedConfirmedBalance: number;
-};
-
 export type RequestListResponse = {
   requests: TimeOffRequest[];
 };

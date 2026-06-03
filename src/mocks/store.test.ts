@@ -75,6 +75,37 @@ describe("mock HCM store", () => {
     }
   });
 
+  it("rejects a request overlapping an existing one (no double-booking)", () => {
+    // Seed has a pending Alice/NYC request for 2026-07-01..2026-07-02.
+    try {
+      createRequest({
+        employeeId: SEED_IDS.employee.alice,
+        locationId: SEED_IDS.location.nyc,
+        days: 1,
+        startDate: "2026-07-02",
+        endDate: "2026-07-03",
+      });
+      expect.unreachable("should throw");
+    } catch (error) {
+      expect(isStoreRouteError(error)).toBe(true);
+      if (isStoreRouteError(error)) {
+        expect(error.hcmError.code).toBe(HCM_ERROR_CODE.CONFLICT);
+        expect(error.status).toBe(409);
+      }
+    }
+  });
+
+  it("allows a non-overlapping request for the same cell", () => {
+    const created = createRequest({
+      employeeId: SEED_IDS.employee.alice,
+      locationId: SEED_IDS.location.nyc,
+      days: 1,
+      startDate: "2026-07-10",
+      endDate: "2026-07-10",
+    });
+    expect(created.status).toBe(REQUEST_STATUS.PENDING);
+  });
+
   it("silent-fail returns success but does not persist write", () => {
     armSilentFail();
     writeCell(SEED_IDS.employee.alice, SEED_IDS.location.remote, {

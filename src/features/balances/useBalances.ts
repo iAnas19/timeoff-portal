@@ -1,18 +1,11 @@
 "use client";
 
-import {
-  useMutationState,
-  useQueries,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useMutationState, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import {
-  applyOptimisticDeduction,
-  balancesAreEqual,
+  applyOptimisticDeductionToCell,
   calculateAvailableBalance,
-  shouldBufferPollResult,
-  shouldShowRefreshedMidSession,
+  detectExternalConfirmedChange,
 } from "@/features/balances/balance.utils";
 import {
   fetchBalance,
@@ -31,7 +24,7 @@ import {
   type BalanceCardOverlay,
 } from "@/shared/hcm/queryKeys";
 import type { BalanceDisplayStatus } from "@/shared/hcm/constants";
-import type { BalanceCell, EmployeeBalances, SubmitTimeOffRequestInput } from "@/shared/hcm/schemas";
+import type { BalanceCell, SubmitTimeOffRequestInput } from "@/shared/hcm/schemas";
 
 export type BalanceCardState = {
   locationId: string;
@@ -41,13 +34,14 @@ export type BalanceCardState = {
   pendingDeductions: number;
   status: BalanceDisplayStatus;
   message?: string;
+  // A background poll is in flight. This is a quiet liveness hint, NOT a status
+  // change — flipping the whole card on every 30s poll reads as flicker.
+  isRefreshing?: boolean;
 };
 
 const OVERLAY_STALE_TIME_MS = Number.POSITIVE_INFINITY;
 
-function isSubmitVariables(
-  value: unknown,
-): value is SubmitTimeOffRequestInput {
+function isSubmitVariables(value: unknown): value is SubmitTimeOffRequestInput {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -56,11 +50,28 @@ function isSubmitVariables(
   );
 }
 
+function cellToCard(
+  cell: BalanceCell,
+  status: BalanceDisplayStatus,
+  message?: string,
+): BalanceCardState {
+  return {
+    locationId: cell.locationId,
+    locationName: cell.locationName,
+    availableBalance: calculateAvailableBalance(
+      cell.confirmedBalance,
+      cell.pendingDeductions,
+    ),
+    confirmedBalance: cell.confirmedBalance,
+    pendingDeductions: cell.pendingDeductions,
+    status,
+    message,
+  };
+}
+
 export function useBalances(employeeId: string) {
   const queryClient = useQueryClient();
-  const bufferRef = useRef(new Map<string, BalanceCell>());
-  const hadBufferRef = useRef(new Map<string, boolean>());
-  const baselineRef = useRef(new Map<string, number>());
+  const lastConfirmedRef = useRef(new Map<string, number>());
 
   const employeeQuery = useQuery({
     queryKey: BALANCE_KEYS.byEmployee(employeeId),
@@ -68,7 +79,10 @@ export function useBalances(employeeId: string) {
     staleTime: BALANCE_BATCH_STALE_TIME_MS,
   });
 
-  const locations = employeeQuery.data?.balances ?? [];
+  const locations = useMemo(
+    () => employeeQuery.data?.balances ?? [],
+    [employeeQuery.data],
+  );
 
   const cellQueries = useQueries({
     queries: locations.map((seed) => ({
@@ -91,243 +105,111 @@ export function useBalances(employeeId: string) {
     })),
   });
 
-  const pendingMutations = useMutationState({
-    filters: {
-      status: "pending",
-      mutationKey: MUTATION_KEYS.submitRequest,
-    },
+  const pendingSubmits = useMutationState({
+    filters: { status: "pending", mutationKey: MUTATION_KEYS.submitRequest },
   });
 
-  const submitMutations = useMutationState({
-    filters: { mutationKey: MUTATION_KEYS.submitRequest },
-  });
-
-  const isMutationPending = pendingMutations.length > 0;
-
-  useEffect(() => {
-    for (const mutation of pendingMutations) {
+  const optimisticDaysByLocation = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const mutation of pendingSubmits) {
       if (!isSubmitVariables(mutation.variables)) {
         continue;
       }
-
-      const { locationId } = mutation.variables;
-      if (baselineRef.current.has(locationId)) {
-        continue;
-      }
-
-      const cell = queryClient.getQueryData<BalanceCell>(
-        BALANCE_KEYS.byEmployeeAndLocation(employeeId, locationId),
-      );
-      if (cell) {
-        baselineRef.current.set(locationId, cell.confirmedBalance);
-      }
+      const { locationId, days } = mutation.variables;
+      map.set(locationId, (map.get(locationId) ?? 0) + days);
     }
-  }, [employeeId, pendingMutations, queryClient]);
+    return map;
+  }, [pendingSubmits]);
 
+  // Authoritative poll is always truth. Because this view never mutates
+  // `confirmedBalance`, any change a poll reports is an external HCM refresh
+  // (e.g. anniversary bonus) — surface it as a non-intrusive banner without
+  // clobbering an in-flight optimistic deduction (which is derived, not stored).
   useEffect(() => {
     locations.forEach((seed, index) => {
-      const polled = cellQueries[index]?.data;
-      if (!polled) {
+      const cell = cellQueries[index]?.data;
+      if (!cell) {
         return;
       }
 
-      const locationId = seed.locationId;
-      const displayed = queryClient.getQueryData<BalanceCell>(
-        BALANCE_KEYS.byEmployeeAndLocation(employeeId, locationId),
-      );
-      if (!displayed) {
+      const previousConfirmed = lastConfirmedRef.current.get(seed.locationId);
+      lastConfirmedRef.current.set(seed.locationId, cell.confirmedBalance);
+
+      if (!detectExternalConfirmedChange(previousConfirmed, cell.confirmedBalance)) {
         return;
       }
 
-      if (
-        shouldBufferPollResult({
-          isMutationPending,
-          polledConfirmedBalance: polled.confirmedBalance,
-          displayedConfirmedBalance: displayed.confirmedBalance,
-        })
-      ) {
-        bufferRef.current.set(locationId, polled);
-        hadBufferRef.current.set(locationId, true);
+      const overlayKey = BALANCE_KEYS.overlay(employeeId, seed.locationId);
+      if (queryClient.getQueryData<BalanceCardOverlay>(overlayKey)) {
         return;
       }
 
-      if (isMutationPending || !bufferRef.current.has(locationId)) {
-        return;
-      }
-
-      const buffered = bufferRef.current.get(locationId)!;
-      const baseline =
-        baselineRef.current.get(locationId) ?? displayed.confirmedBalance;
-
-      queryClient.setQueryData(
-        BALANCE_KEYS.byEmployeeAndLocation(employeeId, locationId),
-        buffered,
-      );
-
-      if (
-        shouldShowRefreshedMidSession({
-          baselineConfirmedBalance: baseline,
-          settledConfirmedBalance: buffered.confirmedBalance,
-          hadBufferedPoll: hadBufferRef.current.get(locationId) ?? false,
-        })
-      ) {
-        queryClient.setQueryData<BalanceCardOverlay>(
-          BALANCE_KEYS.overlay(employeeId, locationId),
-          {
-            status: BALANCE_DISPLAY_STATUS.REFRESHED_MID_SESSION,
-            message: "Balance updated while your request was processing.",
-          },
-        );
-      }
-
-      bufferRef.current.delete(locationId);
-      hadBufferRef.current.delete(locationId);
-      baselineRef.current.delete(locationId);
+      queryClient.setQueryData<BalanceCardOverlay>(overlayKey, {
+        status: BALANCE_DISPLAY_STATUS.REFRESHED_MID_SESSION,
+        message: "Balance updated by HCM while you were viewing it.",
+      });
     });
-  }, [cellQueries, employeeId, isMutationPending, locations, queryClient]);
+  }, [cellQueries, employeeId, locations, queryClient]);
 
   const cards = useMemo((): BalanceCardState[] => {
     return locations.map((seed, index) => {
       const query = cellQueries[index];
       const overlay = overlayQueries[index]?.data ?? null;
-      const locationId = seed.locationId;
+      const cell = query?.data ?? seed;
 
       if (overlay) {
-        const cell = query?.data ?? seed;
-        return {
-          locationId,
-          locationName: cell.locationName,
-          availableBalance: calculateAvailableBalance(
-            cell.confirmedBalance,
-            cell.pendingDeductions,
-          ),
-          confirmedBalance: cell.confirmedBalance,
-          pendingDeductions: cell.pendingDeductions,
-          status: overlay.status,
-          message: overlay.message,
-        };
+        return cellToCard(cell, overlay.status, overlay.message);
       }
 
       if (employeeQuery.isLoading || (query?.isLoading && !query.data)) {
-        return {
-          locationId,
-          locationName: seed.locationName,
-          availableBalance: 0,
-          confirmedBalance: 0,
-          pendingDeductions: 0,
-          status: BALANCE_DISPLAY_STATUS.LOADING,
-        };
+        return cellToCard(
+          { ...seed, confirmedBalance: 0, pendingDeductions: 0 },
+          BALANCE_DISPLAY_STATUS.LOADING,
+        );
       }
 
       if (employeeQuery.isError || query?.isError) {
         const error = employeeQuery.error ?? query?.error;
-        return {
-          locationId,
-          locationName: seed.locationName,
-          availableBalance: 0,
-          confirmedBalance: 0,
-          pendingDeductions: 0,
-          status: BALANCE_DISPLAY_STATUS.ERROR,
-          message: isHCMError(error)
-            ? error.message
-            : "Unable to load balance",
-        };
+        return cellToCard(
+          { ...seed, confirmedBalance: 0, pendingDeductions: 0 },
+          BALANCE_DISPLAY_STATUS.ERROR,
+          isHCMError(error) ? error.message : "Unable to load balance",
+        );
       }
 
-      const cell = query?.data ?? seed;
-      const failedMutation = submitMutations.find(
-        (mutation) =>
-          mutation.status === "error" &&
-          isSubmitVariables(mutation.variables) &&
-          mutation.variables.locationId === locationId,
-      );
-
-      if (failedMutation) {
-        return {
-          locationId,
-          locationName: cell.locationName,
-          availableBalance: calculateAvailableBalance(
-            cell.confirmedBalance,
-            cell.pendingDeductions,
-          ),
-          confirmedBalance: cell.confirmedBalance,
-          pendingDeductions: cell.pendingDeductions,
-          status: BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK,
-          message: "Your last action did not apply. Balance restored.",
-        };
+      const optimisticDays = optimisticDaysByLocation.get(seed.locationId) ?? 0;
+      if (optimisticDays > 0) {
+        return cellToCard(
+          applyOptimisticDeductionToCell(cell, optimisticDays),
+          BALANCE_DISPLAY_STATUS.OPTIMISTIC_PENDING,
+          "Pending your request…",
+        );
       }
 
-      const pendingForLocation = pendingMutations.some(
-        (mutation) =>
-          isSubmitVariables(mutation.variables) &&
-          mutation.variables.locationId === locationId,
-      );
-
-      const optimisticCell = queryClient.getQueryData<BalanceCell>(
-        BALANCE_KEYS.byEmployeeAndLocation(employeeId, locationId),
-      );
-      const showOptimistic =
-        pendingForLocation ||
-        (optimisticCell !== undefined &&
-          !balancesAreEqual(
-            optimisticCell.pendingDeductions,
-            cell.pendingDeductions,
-          ));
-
-      if (showOptimistic) {
-        const displayCell = optimisticCell ?? cell;
-        return {
-          locationId,
-          locationName: displayCell.locationName,
-          availableBalance: calculateAvailableBalance(
-            displayCell.confirmedBalance,
-            displayCell.pendingDeductions,
-          ),
-          confirmedBalance: displayCell.confirmedBalance,
-          pendingDeductions: displayCell.pendingDeductions,
-          status: BALANCE_DISPLAY_STATUS.OPTIMISTIC_PENDING,
-          message: "Pending your request…",
-        };
-      }
-
-      if (query?.isStale) {
-        return {
-          locationId,
-          locationName: cell.locationName,
-          availableBalance: calculateAvailableBalance(
-            cell.confirmedBalance,
-            cell.pendingDeductions,
-          ),
-          confirmedBalance: cell.confirmedBalance,
-          pendingDeductions: cell.pendingDeductions,
-          status: BALANCE_DISPLAY_STATUS.STALE,
-          message: "Balance may be outdated.",
-        };
+      // Genuinely stale AND not currently refreshing — i.e. polling was paused
+      // (tab backgrounded) and the value has aged past the poll interval. A
+      // routine in-flight refetch is not "stale"; it's surfaced quietly below.
+      if (query?.isStale && !query?.isFetching) {
+        return cellToCard(
+          cell,
+          BALANCE_DISPLAY_STATUS.STALE,
+          "Balance may be outdated.",
+        );
       }
 
       return {
-        locationId,
-        locationName: cell.locationName,
-        availableBalance: calculateAvailableBalance(
-          cell.confirmedBalance,
-          cell.pendingDeductions,
-        ),
-        confirmedBalance: cell.confirmedBalance,
-        pendingDeductions: cell.pendingDeductions,
-        status: BALANCE_DISPLAY_STATUS.SUCCESS,
+        ...cellToCard(cell, BALANCE_DISPLAY_STATUS.SUCCESS),
+        isRefreshing: query?.isFetching ?? false,
       };
     });
   }, [
     cellQueries,
-    employeeId,
     employeeQuery.error,
     employeeQuery.isError,
     employeeQuery.isLoading,
     locations,
+    optimisticDaysByLocation,
     overlayQueries,
-    pendingMutations,
-    queryClient,
-    submitMutations,
   ]);
 
   function clearOverlay(locationId: string) {
@@ -353,35 +235,4 @@ export function setBalanceOverlay(
     BALANCE_KEYS.overlay(employeeId, locationId),
     overlay,
   );
-}
-
-export function applySubmitOptimisticUpdate(
-  queryClient: ReturnType<typeof useQueryClient>,
-  input: SubmitTimeOffRequestInput,
-) {
-  const employeeKey = BALANCE_KEYS.byEmployee(input.employeeId);
-  const cellKey = BALANCE_KEYS.byEmployeeAndLocation(
-    input.employeeId,
-    input.locationId,
-  );
-
-  const previousEmployee = queryClient.getQueryData(employeeKey);
-  const previousCell = queryClient.getQueryData<BalanceCell>(cellKey);
-
-  queryClient.setQueryData<EmployeeBalances | undefined>(employeeKey, (current) =>
-    applyOptimisticDeduction(current, input),
-  );
-
-  const updatedEmployee = queryClient.getQueryData<{
-    balances: BalanceCell[];
-  }>(employeeKey);
-  const updatedCell = updatedEmployee?.balances.find(
-    (cell) => cell.locationId === input.locationId,
-  );
-
-  if (updatedCell) {
-    queryClient.setQueryData(cellKey, updatedCell);
-  }
-
-  return { previousEmployee, previousCell, employeeKey, cellKey };
 }

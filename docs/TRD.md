@@ -166,38 +166,58 @@ Invalidate the **broadest correct scope** after mutations (e.g. employee-level b
 
 ---
 
-## 7. Reconciliation buffer (critical)
+## 7. Reconciling a background poll with an in-flight action (critical)
 
 ### 7.1 Problem
 
-A background poll may return a new balance **while** an optimistic mutation is in flight. Applying the poll immediately would overwrite the user's predicted value and confuse them.
+A background poll may return a new balance **while** an optimistic mutation is in flight. The naive fix is a literal *buffer*: stash the polled value, hold it back from the display, and flush it after the mutation settles.
 
-### 7.2 Sequence
+We rejected the literal buffer (see 7.4) because it requires the optimistic value and the authoritative value to share one cache slot — and a poll that lands on that slot overwrites the optimistic prediction before any buffer can intercept it. The same flaw makes "polled vs displayed" a comparison of a value against itself.
+
+### 7.2 Chosen model — authoritative truth + composable optimistic overlay
+
+The per-cell poll is **always written straight into its own cache key and is always treated as truth.** The optimistic deduction is **never written into that cache** — it is *derived* at display time and layered on top:
+
+```
+displayedPending   = authoritativeCell.pendingDeductions + Σ(days of pending submits for this cell)
+displayedAvailable = max(0, authoritativeCell.confirmedBalance - displayedPending)
+```
+
+Because the deduction is a derivation rather than a stored value, **a poll can never clobber it** — refreshing `confirmedBalance` and adding the optimistic `pending` overlay simply compose. This removes the buffer, the refs, and the dual-key bookkeeping entirely.
+
+### 7.3 Detecting an external refresh (the `refreshed-mid-session` signal)
+
+This view never mutates `confirmedBalance` itself (a submit only changes pending deductions; approvals live in the manager view). Therefore **any change to `confirmedBalance` reported by a poll is external** — an HCM-side refresh such as an anniversary bonus.
 
 ```mermaid
 sequenceDiagram
   participant User
-  participant UI
-  participant Cache
-  participant Buffer
+  participant Hook as useBalances
+  participant Cache as Authoritative cell (poll)
+  participant Overlay as Overlay key
   participant HCM
 
-  User->>UI: Submit request (mutation starts)
-  UI->>Cache: onMutate - optimistic deduction
-  HCM-->>Cache: Poll returns different balance (anniversary)
-  Cache->>Buffer: Store polled value (do not apply to display)
-  HCM-->>Cache: Mutation settles
-  UI->>Cache: onSettled - invalidate/refetch
-  Cache->>Buffer: Flush buffered value if newer
-  UI->>User: refreshed-mid-session banner if value changed
+  User->>Hook: Viewing balances (baseline confirmed recorded)
+  HCM-->>Cache: Poll returns higher confirmed (anniversary)
+  Hook->>Hook: detectExternalConfirmedChange(prev, next) → true
+  Hook->>Overlay: set refreshed-mid-session (non-intrusive banner)
+  User->>Hook: Dismiss → clearOverlay
 ```
 
-### 7.3 Numbered rules for implementers
+Rules for implementers:
 
-1. If `mutation.isPending` and per-cell poll returns `value !== displayedOptimistic` → write poll result to **buffer**, not display cache.
-2. On mutation **`onSettled`** → refetch/invalidate → compare server value to optimistic prediction.
-3. Flush buffer into cache after settle; if buffer differed from pre-mutation baseline → set status **`refreshed-mid-session`** (inline banner).
-4. If server success but balance unchanged vs prediction → **`hcm-silent-conflict`** / `SILENT_FAILURE`.
+1. Per cell, keep the **last observed `confirmedBalance`** (a ref). On the first observation, record the baseline only — never banner.
+2. When a poll reports a `confirmedBalance` that differs from the last observed value → set the **`refreshed-mid-session`** overlay (skip if an overlay is already showing, so a silent-conflict warning is not overwritten).
+3. Optimistic deductions are derived from pending mutations, so this detection works identically whether or not a submit is in flight.
+4. **Silent failure** is detected on `onSettled`: snapshot the cell in `onMutate` (read-only, no write), then after `invalidateQueries` refetches the authoritative cell, compare `refetched.pendingDeductions` to `snapshot.pendingDeductions + days`. A mismatch → **`hcm-silent-conflict`** / `SILENT_FAILURE`.
+
+### 7.4 Alternative considered — literal poll buffer
+
+| Alternative | Verdict | Reason |
+|-------------|---------|--------|
+| Literal buffer (stash poll, flush after settle) | **Rejected** | Optimistic + authoritative values must share one cache key, so an in-flight poll overwrites the prediction before the buffer can hold it; "polled vs displayed" degenerates to comparing a value to itself. Composable overlay is simpler and cannot clobber. |
+| Separate `…/authoritative` + `…/display` keys | Rejected | Removes the clobber but duplicates every cell and adds a manual sync step; derivation achieves the same with no second key. |
+| Suspend polling while a mutation is pending | Rejected | Hides genuine external changes (anniversary) during exactly the window we most want to surface them. |
 
 ---
 
@@ -272,10 +292,10 @@ All HTTP errors return sanitized JSON envelope — no stack traces to client.
 
 | Container | Queries / mutations | Child view |
 |-----------|---------------------|------------|
-| `BalanceListContainer` | `useBalanceBatchHydration`, per-cell `useBalanceQuery` + reconciliation hook | `BalanceListView` → `BalanceCard[]` |
-| `RequestFormContainer` | `useOptimisticRequest` (submit mutation) | `RequestForm` |
+| `EmployeeBalancesContainer` | `useBalances` — batch hydration + per-cell polls, optimistic-overlay derivation, external-change detection | `EmployeeBalancesView` → `BalanceCard[]` |
+| `RequestForm` container | `useSubmitRequest` — submit mutation (snapshot + `onSettled` reconciliation) | `RequestForm` view |
 
-Page: composes both containers; passes `employeeId` from session/mock auth only (not URL query params).
+Page: composes both containers; passes `employeeId` from session/mock auth only (not URL query params). Container + view + card are colocated per feature file (see `.cursorrules` §2) rather than split across folders.
 
 ### 10.2 Manager route `/(manager)`
 

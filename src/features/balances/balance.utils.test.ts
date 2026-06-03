@@ -2,12 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { EmployeeBalances } from "@/shared/hcm/schemas";
 import {
   applyOptimisticDeduction,
+  applyOptimisticDeductionToCell,
   calculateAvailableBalance,
+  countInclusiveDays,
+  detectExternalConfirmedChange,
   detectSilentFailure,
   findBalanceCell,
   balancesAreEqual,
-  shouldBufferPollResult,
-  shouldShowRefreshedMidSession,
 } from "@/features/balances/balance.utils";
 
 const SAMPLE_BALANCES: EmployeeBalances = {
@@ -87,27 +88,47 @@ describe("reconciliation helpers", () => {
     ).toBe(false);
   });
 
-  it("buffers poll when mutation pending and values differ", () => {
-    expect(
-      shouldBufferPollResult({
-        isMutationPending: true,
-        polledConfirmedBalance: 12,
-        displayedConfirmedBalance: 10,
-      }),
-    ).toBe(true);
-  });
-
   it("treats near-equal balances as equal", () => {
     expect(balancesAreEqual(10, 10.0005)).toBe(true);
   });
 
-  it("shows refreshed-mid-session when buffered poll differs after settle", () => {
-    expect(
-      shouldShowRefreshedMidSession({
-        baselineConfirmedBalance: 10,
-        settledConfirmedBalance: 12,
-        hadBufferedPoll: true,
-      }),
-    ).toBe(true);
+  it("flags an external confirmed-balance change against the last observed value", () => {
+    expect(detectExternalConfirmedChange(10, 12)).toBe(true);
+    expect(detectExternalConfirmedChange(10, 10)).toBe(false);
+  });
+
+  it("does not flag a change on the first observation (no baseline yet)", () => {
+    expect(detectExternalConfirmedChange(undefined, 12)).toBe(false);
+  });
+});
+
+describe("countInclusiveDays", () => {
+  it("counts a single day as 1", () => {
+    expect(countInclusiveDays("2026-08-01", "2026-08-01")).toBe(1);
+  });
+
+  it("counts an inclusive range", () => {
+    expect(countInclusiveDays("2026-08-01", "2026-08-05")).toBe(5);
+  });
+
+  it("returns 0 for a reversed or invalid range", () => {
+    expect(countInclusiveDays("2026-08-05", "2026-08-01")).toBe(0);
+    expect(countInclusiveDays("", "2026-08-01")).toBe(0);
+  });
+});
+
+describe("applyOptimisticDeductionToCell", () => {
+  const cell = SAMPLE_BALANCES.balances[0];
+
+  it("adds the requested days to pending deductions", () => {
+    expect(applyOptimisticDeductionToCell(cell, 3).pendingDeductions).toBe(5);
+  });
+
+  it("leaves the cell unchanged when the deduction exceeds available", () => {
+    expect(applyOptimisticDeductionToCell(cell, 99)).toEqual(cell);
+  });
+
+  it("leaves the cell unchanged for a non-positive deduction", () => {
+    expect(applyOptimisticDeductionToCell(cell, 0)).toBe(cell);
   });
 });

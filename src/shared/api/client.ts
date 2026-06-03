@@ -52,7 +52,13 @@ export async function hcmFetch<T>(
   const method = options.method ?? "GET";
   const controller = new AbortController();
   const timeoutMs = config.HCM_API_TIMEOUT_MS;
-  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  // Flag the abort cause ourselves — the thrown error's shape varies by runtime
+  // (DOMException vs TypeError), so we cannot reliably sniff it after the fact.
+  let didTimeout = false;
+  const timeoutId = setTimeout(() => {
+    didTimeout = true;
+    controller.abort();
+  }, timeoutMs);
 
   try {
     const response = await fetch(buildUrl(path), {
@@ -78,7 +84,10 @@ export async function hcmFetch<T>(
       throw error;
     }
 
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (
+      didTimeout ||
+      (error instanceof DOMException && error.name === "AbortError")
+    ) {
       throw createHCMError({
         code: HCM_ERROR_CODE.TIMEOUT,
         message: "HCM request timed out",

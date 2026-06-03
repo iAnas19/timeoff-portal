@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, within } from "storybook/test";
 import { RequestFormView } from "@/features/requests/RequestForm";
 import { REQUEST_FORM_STATUS } from "@/shared/hcm/constants";
 
@@ -28,7 +28,6 @@ const meta = {
   args: {
     locations,
     formStatus: REQUEST_FORM_STATUS.IDLE,
-    minDays: 0.5,
     maxDays: 365,
     isSubmitting: false,
     onSubmit: () => undefined,
@@ -92,8 +91,23 @@ export const SubmitSilentConflict: Story = {
     statusMessage: "Verify before resubmitting.",
   },
   play: async ({ canvasElement }) => {
-    await userEvent.click(
-      within(canvasElement).getByRole("button", { name: /new request/i }),
-    );
+    await expect(
+      within(canvasElement).getByText(/verify before resubmitting/i),
+    ).toBeInTheDocument();
+  },
+};
+
+export const AllExhausted: Story = {
+  name: "RequestForm/AllExhausted",
+  args: {
+    locations: locations.map((location) => ({
+      ...location,
+      pendingDeductions: location.confirmedBalance,
+    })),
+  },
+  play: async ({ canvasElement }) => {
+    await expect(
+      within(canvasElement).getByText(/fully booked/i),
+    ).toBeInTheDocument();
   },
 };

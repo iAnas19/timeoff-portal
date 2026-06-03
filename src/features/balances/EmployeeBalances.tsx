@@ -24,6 +24,7 @@ export function BalanceCard({
   pendingDeductions,
   status,
   message,
+  isRefreshing,
   onDismissOverlay,
 }: BalanceCardProps) {
   const showOverlayBanner =
@@ -34,8 +35,18 @@ export function BalanceCard({
   return (
     <Card className="balance-card">
       <div className="balance-card-header">
-        <h3 className="balance-card-title">{locationName}</h3>
-        <Badge>{statusLabel(status)}</Badge>
+        <div>
+          <span className="balance-card-eyebrow">Balance</span>
+          <h3 className="balance-card-title">{locationName}</h3>
+        </div>
+        <div className="balance-card-status">
+          {isRefreshing && status === BALANCE_DISPLAY_STATUS.SUCCESS ? (
+            <span className="balance-refreshing" aria-label="Refreshing balance">
+              Updating
+            </span>
+          ) : null}
+          <Badge className={badgeTone(status)}>{statusLabel(status)}</Badge>
+        </div>
       </div>
 
       {status === BALANCE_DISPLAY_STATUS.LOADING ? (
@@ -88,6 +99,24 @@ export function BalanceCard({
       ) : null}
     </Card>
   );
+}
+
+function badgeTone(status: BalanceDisplayStatus): string {
+  switch (status) {
+    case BALANCE_DISPLAY_STATUS.SUCCESS:
+      return "badge-ok";
+    case BALANCE_DISPLAY_STATUS.OPTIMISTIC_PENDING:
+    case BALANCE_DISPLAY_STATUS.REFRESHED_MID_SESSION:
+      return "badge-accent";
+    case BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK:
+    case BALANCE_DISPLAY_STATUS.HCM_SILENT_CONFLICT:
+      return "badge-warn";
+    case BALANCE_DISPLAY_STATUS.HCM_REJECTED:
+    case BALANCE_DISPLAY_STATUS.ERROR:
+      return "badge-danger";
+    default:
+      return "";
+  }
 }
 
 function statusLabel(status: BalanceDisplayStatus): string {

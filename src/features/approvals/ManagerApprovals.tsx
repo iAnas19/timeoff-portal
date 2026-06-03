@@ -36,6 +36,7 @@ export function ManagerApprovalCard({
     <Card className="approval-card">
       <div className="approval-card-header">
         <div>
+          <span className="balance-card-eyebrow">Pending request</span>
           <h3 className="approval-card-title">
             {approval.employeeDisplayName}
           </h3>
@@ -45,7 +46,9 @@ export function ManagerApprovalCard({
             {request.endDate}
           </p>
         </div>
-        <Badge>{approvalStatusLabel(status)}</Badge>
+        <Badge className={approvalBadgeTone(status)}>
+          {approvalStatusLabel(status)}
+        </Badge>
       </div>
 
       <dl className="approval-meta">
@@ -102,6 +105,21 @@ export function ManagerApprovalCard({
       </div>
     </Card>
   );
+}
+
+function approvalBadgeTone(status: ApprovalCardStatus): string {
+  switch (status) {
+    case APPROVAL_CARD_STATUS.PENDING_FRESH_BALANCE:
+    case APPROVAL_CARD_STATUS.APPROVED:
+      return "badge-ok";
+    case APPROVAL_CARD_STATUS.PENDING_STALE_BALANCE:
+      return "badge-warn";
+    case APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE:
+    case APPROVAL_CARD_STATUS.DENIED:
+      return "badge-danger";
+    default:
+      return "";
+  }
 }
 
 function approvalStatusLabel(status: ApprovalCardStatus): string {

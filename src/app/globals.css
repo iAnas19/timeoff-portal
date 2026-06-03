@@ -1,10 +1,34 @@
 :root {
-  --background: #f8fafc;
-  --foreground: #0f172a;
-  --muted: #64748b;
-  --border: #e2e8f0;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
+  /* Neutral ramp (warm) */
+  --bg: #faf9f8;
+  --surface: #ffffff;
+  --ink: #1a1a1a;
+  --muted: #5f5b57;
+  --faint: #8a857f;
+  --border: #e7e5e4;
+  --border-strong: #d6d3d1;
+
+  /* One accent — primary action, focus, the key number */
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-soft: #eef2ff;
+
+  /* Semantic — functional only */
+  --ok: #15803d;
+  --ok-soft: #f0fdf4;
+  --ok-border: #bbf7d0;
+  --warn: #b45309;
+  --warn-soft: #fffbeb;
+  --warn-border: #fde68a;
+  --danger: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-border: #fecaca;
+
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-pill: 9999px;
+  --shadow: 0 1px 2px rgba(15, 15, 15, 0.05);
+  --ring: 0 0 0 3px rgba(79, 70, 229, 0.25);
 }
 
 *,
@@ -27,9 +51,10 @@ body {
     "Segoe UI",
     Roboto,
     sans-serif;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--bg);
+  color: var(--ink);
   line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
 }
 
 a {
@@ -41,70 +66,85 @@ a:hover {
   text-decoration: underline;
 }
 
+:focus-visible {
+  outline: none;
+  box-shadow: var(--ring);
+  border-radius: var(--radius-sm);
+}
+
 main {
-  max-width: 48rem;
+  max-width: max(46rem,70vw);
   margin: 0 auto;
-  padding: 2rem 1.5rem;
+  padding: 3rem 1.5rem 4rem;
 }
 
 .page-title {
-  margin: 0 0 0.5rem;
-  font-size: 1.75rem;
+  margin: 0 0 0.375rem;
+  font-size: 1.5rem;
   font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .page-lead {
-  margin: 0 0 2rem;
+  margin: 0 0 2.5rem;
   color: var(--muted);
+  font-size: 0.9375rem;
+}
+
+/* Quiet uppercase label — gives sections an editorial, non-generic rhythm */
+.section-title {
+  margin: 0 0 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
+}
+
+.section {
+  margin-bottom: 2.5rem;
 }
 
 .nav-list {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 0.625rem;
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
 .nav-list a {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0.875rem 1rem;
   border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  background: #fff;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
   font-weight: 500;
+  box-shadow: var(--shadow);
 }
 
 .nav-list a:hover {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
   text-decoration: none;
 }
 
 .phase-note {
-  margin-top: 2rem;
-  padding: 1rem;
-  border-radius: 0.5rem;
-  background: #fff;
-  border: 1px dashed var(--border);
+  margin-top: 2.5rem;
   font-size: 0.875rem;
   color: var(--muted);
 }
 
-.section {
-  margin-bottom: 2rem;
-}
-
-.section-title {
-  margin: 0 0 1rem;
-  font-size: 1.125rem;
-  font-weight: 600;
-}
-
 .card-grid {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(20rem, 1fr));
+  gap: 0.875rem;
 }
+
+/* ---- Balance card ---- */
 
 .balance-card-header,
 .approval-card-header {
@@ -112,14 +152,31 @@ main {
   align-items: flex-start;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.875rem;
 }
 
 .balance-card-title,
 .approval-card-title {
   margin: 0;
-  font-size: 1rem;
+  font-size: 0.9375rem;
   font-weight: 600;
+}
+
+.balance-card-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.balance-card-eyebrow {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--faint);
+  margin-bottom: 0.125rem;
 }
 
 .approval-card-subtitle {
@@ -129,7 +186,7 @@ main {
 }
 
 .balance-available {
-  margin: 0 0 0.75rem;
+  margin: 0 0 0.875rem;
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
@@ -139,6 +196,8 @@ main {
   font-size: 2rem;
   font-weight: 700;
   line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .balance-available-label {
@@ -152,6 +211,8 @@ main {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.75rem;
   margin: 0;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
 }
 
 .balance-meta dt,
@@ -164,6 +225,7 @@ main {
 .approval-meta dd {
   margin: 0.125rem 0 0;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .balance-card-loading,
@@ -172,6 +234,25 @@ main {
   align-items: center;
   gap: 0.5rem;
   color: var(--muted);
+  font-size: 0.875rem;
+}
+
+/* Quiet liveness dot — does not shift layout or change the status */
+.balance-refreshing {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.6875rem;
+  color: var(--faint);
+}
+
+.balance-refreshing::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  opacity: 0.6;
 }
 
 .balance-note {
@@ -184,11 +265,11 @@ main {
 }
 
 .balance-note-pending {
-  color: #1d4ed8;
+  color: var(--accent);
 }
 
 .balance-banner {
-  margin-top: 0.75rem;
+  margin-top: 0.875rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -199,18 +280,44 @@ main {
   flex-shrink: 0;
 }
 
+/* ---- Status badge tints (functional color only) ---- */
+
+.badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok);
+}
+
+.badge-warn {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+
+.badge-danger {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge-accent {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---- Demo panel ---- */
+
 .demo-panel {
   margin-top: 1rem;
   padding: 0.875rem 1rem;
-  border: 1px dashed var(--border);
-  border-radius: 0.5rem;
-  background: #fff;
+  border: 1px dashed var(--border-strong);
+  border-radius: var(--radius);
 }
 
 .demo-panel-label {
   margin: 0 0 0.5rem;
-  font-size: 0.8125rem;
-  color: var(--muted);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--faint);
 }
 
 .demo-panel-actions {
@@ -219,13 +326,44 @@ main {
   gap: 0.5rem;
 }
 
+/* ---- Request form ---- */
+
 .request-form {
-  margin-bottom: 2rem;
+  margin-bottom: 2.5rem;
 }
 
 .form-grid {
   display: grid;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 0.875rem;
+}
+
+@media (max-width: 28rem) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.form-summary {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--muted);
+}
+
+.form-summary strong {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.form-validation {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: var(--danger);
 }
 
 .form-field {
@@ -241,9 +379,17 @@ main {
 .form-field input,
 .form-field select {
   padding: 0.5rem 0.625rem;
-  border: 1px solid var(--border);
-  border-radius: 0.375rem;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
   font: inherit;
+}
+
+.form-field input:focus-visible,
+.form-field select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: var(--ring);
 }
 
 .form-actions {
@@ -258,15 +404,15 @@ main {
 }
 
 .form-banner-success {
-  background: #ecfdf5;
-  border-color: #a7f3d0;
-  color: #065f46;
+  background: var(--ok-soft);
+  border-color: var(--ok-border);
+  color: var(--ok);
 }
 
 .form-banner-warn {
-  background: #fffbeb;
-  border-color: #fde68a;
-  color: #92400e;
+  background: var(--warn-soft);
+  border-color: var(--warn-border);
+  color: var(--warn);
 }
 
 .form-inline-error {
@@ -275,7 +421,10 @@ main {
 
 .empty-state {
   color: var(--muted);
+  font-size: 0.9375rem;
 }
+
+/* ---- Approvals ---- */
 
 .approval-note {
   margin: 0.75rem 0;
@@ -287,9 +436,16 @@ main {
 }
 
 .approval-result-success {
-  color: #047857;
+  color: var(--ok);
 }
 
 .approval-result-denied {
-  color: #b91c1c;
+  color: var(--danger);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
 }

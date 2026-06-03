@@ -29,56 +29,49 @@ Use TypeScript with strict mode enabled. The goal is just enough type safety to 
 
 ## 2. Folder Structure
 
+Files are organized by feature, kept **flat**. Do not create a folder (or a one-export file) until there is real weight to justify it. A `containers/`, `hooks/`, `schemas/`, `types/` sub-tree *per feature* is over-engineering at this size — it scatters one mental unit across ten files. Co-locate instead, and split only when a file genuinely grows unwieldy.
+
 ```
 src/
-  app/                        # Next.js App Router pages — thin shells only
-    (employee)/
-    (manager)/
-    api/                      # Route handlers (mock HCM endpoints live here)
+  app/                        # Next.js App Router — thin shells only
+    (employee)/employee/page.tsx
+    (manager)/manager/page.tsx
+    api/hcm/[...path]/route.ts # Mock HCM — delegates to src/mocks/router
+    layout.tsx  page.tsx  globals.css
 
   features/
-    balances/
-      components/             # Presentation only
-      containers/             # Orchestration only
-      hooks/                  # Feature-scoped custom hooks
-      services/               # API call implementations
-      store/                  # Zustand slices (UI state only)
-      schemas/                # Zod schemas for this domain
-      types/                  # Domain types
-      queryKeys/              # Query key definitions for this feature
-      constants/              # Status codes, event names, named magic values
-      utils/                  # Pure transformation functions
-    requests/
-      ...
-    approvals/
-      ...
+    balances/                 # EmployeeBalances.tsx (container + view + card),
+                              # useBalances.ts, balance.service.ts, balance.utils.ts,
+                              # *.stories.tsx, *.test.ts(x) — all colocated, flat
+    requests/                 # RequestForm.tsx, useSubmitRequest.ts, request.service.ts, ...
+    approvals/                # ManagerApprovals.tsx, useApprovals.ts, approval.service.ts, ...
 
   shared/
-    api/                      # Base fetch client, interceptors, error factory
-    hooks/                    # App-wide reusable hooks
-    lib/                      # Third-party config (queryClient, zustand middleware)
-    ui/                       # Primitive design-system components
-    types/                    # Shared cross-feature types
-    constants/                # App-wide named values, feature flags, storage keys
-    schemas/                  # Shared Zod schemas (error envelope, pagination, etc.)
-    utils/                    # Pure shared utilities
-    config/                   # App config — env validation lives here
+    hcm/                      # Cross-feature domain contracts: types, schemas,
+                              # constants (incl. status enums + error codes),
+                              # queryKeys, endpoints — the shared source of truth
+    api/                      # client.ts (single fetch choke point) + errors.ts factory
+    config/                   # config.ts — the only reader of process.env
+    constants/                # app-wide named values (e.g. mock auth)
+    lib/                      # queryClient, AppProviders
+    ui/                       # primitive design-system components
 
-  mocks/
-    handlers/                 # MSW request handlers
-    fixtures/                 # Deterministic seed data
-    scenarios/                # Named scenario builders (anniversary, silent-fail, etc.)
+  mocks/                      # First-class, fully typed
+    store.ts                  # in-memory HCM + armed scenario flags
+    router.ts                 # single handler for both Next routes AND MSW
+    mswHandlers.ts            # thin MSW wrappers over router
+    seed.ts                   # deterministic fixtures (fixed IDs)
+    browser.ts  server.ts     # MSW setup for Storybook / Vitest
 
-  tests/
-    integration/
-    unit/
+  tests/setup.ts
 ```
 
 Rules:
 
-- A feature must never import from another feature directly. Route shared things through `shared/`.
-- `app/` pages must contain zero business logic. They compose containers and pass route params down.
-- `mocks/` is a first-class citizen. It ships with the same type safety as production code.
+- **Domain contracts shared across features live in `shared/hcm/`**, not duplicated per feature. A feature may import from `shared/`. Feature→feature imports are allowed only for a deliberately shared helper (e.g. `requests` reusing `setBalanceOverlay` from `balances`); prefer lifting genuinely shared logic into `shared/` when it grows.
+- **Container, view, and presentational card may live in one feature file** when small. A file becomes a split candidate only when it mixes concerns *and* exceeds roughly a screenful of each.
+- `app/` pages contain zero business logic — they compose a container and pass route params (never via URL query params for employee IDs).
+- `mocks/` ships with the same type safety as production code, and the Next route handler and MSW share **one** router so they cannot drift.
 
 ---
 
@@ -94,8 +87,8 @@ Page
 
 - Containers own: data fetching, mutations, optimistic state, event handlers, business rules.
 - Presenters own: rendering, layout, local interaction state (open/closed dropdown, hover, etc.).
-- A presenter that calls `useQuery` or `useMutation` is a violation.
-- A container that contains more than a single return with one child is a violation.
+- A presenter that calls `useQuery` or `useMutation` is a violation. This is the rule that matters — keep the data-fetching boundary clean.
+- Container and presenter may be **colocated in one file** (container as the default export, view + card as local components). Splitting into separate files is optional, driven by size, not mandated.
 - Pages must never call `useQuery`, `useMutation`, or any service directly.
 
 ---
@@ -246,6 +239,12 @@ useMutation({
 - `onSettled` is the reconciliation step. It is not optional.
 - Never show a permanent "approved" state until `onSettled` completes and the cache is consistent.
 - If the refetched value contradicts the optimistic prediction, the UI surfaces a non-blocking notice. It never silently overwrites.
+
+> **Two ways to apply the optimistic prediction — pick per surface:**
+> 1. **Derived overlay (preferred for balance display, used by the submit flow).** Do *not* `setQueryData` the predicted value. Snapshot the cell in `onMutate` (read-only) for the `onSettled` reconciliation, and *derive* the displayed value from the pending mutation on top of the authoritative cache (see §16, TRD §7). A concurrent poll cannot clobber a value that was never stored.
+> 2. **Cache write + rollback (the block above).** Use when no live poll competes for the same key. `onMutate` writes the prediction and snapshots; `onError` restores the snapshot.
+>
+> Both share the same `onSettled` reconciliation: refetch the authoritative cell, and if `refetched.pendingDeductions !== snapshot.pendingDeductions + days` → `hcm-silent-conflict` / `SILENT_FAILURE`.
 
 ---
 
@@ -454,9 +453,9 @@ Rules:
 - The batch endpoint is called once on initial hydration only.
 - Per-cell real-time reads run on a polling interval (value: `BALANCE_POLL_INTERVAL_MS`, default 30 seconds).
 - Polling pauses when the tab is not focused (`refetchIntervalInBackground: false`).
-- When a background poll returns a different value AND an optimistic mutation is in flight: the new value is held in a reconciliation buffer. It does not overwrite the optimistic value until the mutation settles.
-- After the mutation settles, the buffer is flushed and the final server value is applied.
-- This buffered state is what triggers the `refreshed-mid-session` status.
+- The per-cell poll is **always written to its own cache key and always treated as truth.** Never store the optimistic value in that key — derive it on top (see §8 and TRD §7). A composable overlay cannot be clobbered by a poll, so no reconciliation buffer is needed.
+- `refreshed-mid-session` is triggered by comparing each poll's `confirmedBalance` to the last observed value for that cell (this view never mutates `confirmedBalance`, so any change is external). Record the baseline on first observation; never banner on the first read.
+- `STALE` is shown only while a background refetch is actually in flight (`isRefetching`) — not as a permanent state. With `staleTime: 0`, do **not** drive UI off `isStale` (it would read "stale" forever).
 
 ---
 

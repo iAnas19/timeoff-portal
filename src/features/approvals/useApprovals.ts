@@ -40,7 +40,10 @@ export function useApprovals() {
     staleTime: REQUEST_LIST_STALE_TIME_MS,
   });
 
-  const approvals = queueQuery.data?.approvals ?? [];
+  const approvals = useMemo(
+    () => queueQuery.data?.approvals ?? [],
+    [queueQuery.data],
+  );
 
   const liveBalanceQueries = useQueries({
     queries: approvals.map((approval) => ({
