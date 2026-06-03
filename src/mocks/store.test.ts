@@ -10,7 +10,9 @@ import {
   createRequest,
   getBatch,
   getCell,
+  getPendingApprovals,
   isStoreRouteError,
+  listRequests,
   resetStore,
   simulateAnniversary,
   writeCell,
@@ -108,6 +110,17 @@ describe("mock HCM store", () => {
     expect(
       getCell(SEED_IDS.employee.alice, SEED_IDS.location.nyc).confirmedBalance,
     ).toBe(11);
+  });
+
+  it("lists all requests", () => {
+    expect(listRequests()).toHaveLength(1);
+  });
+
+  it("returns pending approvals with display metadata", () => {
+    const { approvals } = getPendingApprovals();
+    expect(approvals).toHaveLength(1);
+    expect(approvals[0]?.employeeDisplayName).toBe("Alice Chen");
+    expect(approvals[0]?.locationName).toBe("New York");
   });
 });
 

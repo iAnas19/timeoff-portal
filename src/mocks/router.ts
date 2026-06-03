@@ -14,18 +14,21 @@ import {
   createRequest,
   getBatch,
   getCell,
+  getPendingApprovals,
   isStoreRouteError,
+  listRequests,
   patchRequest,
   simulateAnniversary,
   writeCell,
 } from "@/mocks/store";
 
-export const MOCK_AUTH_HEADER = "x-mock-auth";
-export const MOCK_AUTH_VALUE = "demo";
+import {
+  MOCK_AUTH_HEADER,
+  MOCK_AUTH_VALUE,
+  MOCK_AUTH_HEADERS,
+} from "@/shared/constants/mockAuth";
 
-export const MOCK_AUTH_HEADERS = {
-  [MOCK_AUTH_HEADER]: MOCK_AUTH_VALUE,
-};
+export { MOCK_AUTH_HEADER, MOCK_AUTH_VALUE, MOCK_AUTH_HEADERS };
 
 const HCM_PREFIX = "/api/hcm";
 
@@ -97,6 +100,14 @@ export async function handleHcmRequest(request: Request): Promise<Response> {
 
     if (method === "GET" && subPath === "/balances/batch") {
       return jsonOk(getBatch());
+    }
+
+    if (method === "GET" && subPath === "/requests") {
+      return jsonOk({ requests: listRequests() });
+    }
+
+    if (method === "GET" && subPath === "/approvals/pending") {
+      return jsonOk(getPendingApprovals());
     }
 
     const cellGet = subPath.match(/^\/balances\/([^/]+)\/([^/]+)$/);

@@ -1,15 +1,21 @@
 import { nanoid } from "nanoid";
 import { createHCMError, HCM_ERROR_CODE } from "@/shared/api/errors";
-import { REQUEST_STATUS } from "@/shared/hcm/constants";
+import { BALANCE_FRESHNESS, REQUEST_STATUS } from "@/shared/hcm/constants";
 import type {
   BalanceBatchResponse,
   BalanceCell,
   BalanceWriteInput,
   PatchTimeOffRequestInput,
+  PendingApprovalsResponse,
   SubmitTimeOffRequestInput,
   TimeOffRequest,
 } from "@/shared/hcm/schemas";
-import { ANNIVERSARY_BONUS_DAYS, createSeedData } from "@/mocks/seed";
+import { ANNIVERSARY_BONUS_DAYS, createSeedData, SEED_IDS } from "@/mocks/seed";
+
+const DISPLAY_NAMES: Record<string, string> = {
+  [SEED_IDS.employee.alice]: "Alice Chen",
+  [SEED_IDS.employee.bob]: "Bob Patel",
+};
 
 type ArmedFlags = {
   silentFail: boolean;
@@ -244,6 +250,28 @@ export function patchRequest(
   balances[cellIndex] = nextCell;
   requests[requestIndex] = updated;
   return updated;
+}
+
+export function listRequests(): TimeOffRequest[] {
+  return requests.map((request) => ({ ...request }));
+}
+
+export function getPendingApprovals(): PendingApprovalsResponse {
+  return {
+    approvals: requests
+      .filter((request) => request.status === REQUEST_STATUS.PENDING)
+      .map((request) => {
+        const cell = getCellOrFail(request.employeeId, request.locationId);
+        return {
+          request,
+          employeeDisplayName:
+            DISPLAY_NAMES[request.employeeId] ?? request.employeeId,
+          locationName: cell.locationName,
+          balanceAtQueueTime: refreshAsOf({ ...cell }),
+          balanceFreshness: BALANCE_FRESHNESS.FRESH,
+        };
+      }),
+  };
 }
 
 export function simulateAnniversary(employeeId: string): BalanceCell[] {

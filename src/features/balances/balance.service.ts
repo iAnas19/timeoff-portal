@@ -1,32 +1,28 @@
-import { createHCMError, HCM_ERROR_CODE } from "@/shared/api/errors";
-import type {
-  BalanceBatchResponse,
-  BalanceCell,
-  BalanceWriteInput,
-  EmployeeBalances,
+import { z } from "zod";
+import { hcmGet, hcmPatch, hcmPost } from "@/shared/api/client";
+import { HCM_API } from "@/shared/hcm/endpoints";
+import {
+  balanceBatchResponseSchema,
+  balanceCellSchema,
+  employeeBalancesSchema,
+  type BalanceBatchResponse,
+  type BalanceCell,
+  type BalanceWriteInput,
+  type EmployeeBalances,
 } from "@/shared/hcm/schemas";
 
-const NOT_IMPLEMENTED = "Balance service not implemented — Phase 4+";
-
-function notImplemented(): never {
-  throw createHCMError({
-    code: HCM_ERROR_CODE.UNKNOWN,
-    message: NOT_IMPLEMENTED,
-    retryable: false,
-  });
-}
-
 export async function fetchBalanceBatch(): Promise<BalanceBatchResponse> {
-  notImplemented();
+  return hcmGet(HCM_API.BALANCE.BATCH, balanceBatchResponseSchema);
 }
 
 export async function fetchBalance(
   employeeId: string,
   locationId: string,
 ): Promise<BalanceCell> {
-  void employeeId;
-  void locationId;
-  notImplemented();
+  return hcmGet(
+    HCM_API.BALANCE.BY_CELL(employeeId, locationId),
+    balanceCellSchema,
+  );
 }
 
 export async function writeBalance(
@@ -34,15 +30,19 @@ export async function writeBalance(
   locationId: string,
   input: BalanceWriteInput,
 ): Promise<BalanceCell> {
-  void employeeId;
-  void locationId;
-  void input;
-  notImplemented();
+  return hcmPost(
+    HCM_API.BALANCE.BY_CELL(employeeId, locationId),
+    input,
+    balanceCellSchema,
+  );
 }
 
 export async function fetchEmployeeBalances(
   employeeId: string,
 ): Promise<EmployeeBalances> {
-  void employeeId;
-  notImplemented();
+  const batch = await fetchBalanceBatch();
+  return employeeBalancesSchema.parse({
+    employeeId,
+    balances: batch.balances.filter((cell) => cell.employeeId === employeeId),
+  });
 }

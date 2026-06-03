@@ -1,39 +1,38 @@
-import { createHCMError, HCM_ERROR_CODE } from "@/shared/api/errors";
-import type {
-  PatchTimeOffRequestInput,
-  SubmitTimeOffRequestInput,
-  TimeOffRequest,
+import { z } from "zod";
+import { hcmGet, hcmPatch, hcmPost } from "@/shared/api/client";
+import { HCM_API } from "@/shared/hcm/endpoints";
+import {
+  patchTimeOffRequestInputSchema,
+  timeOffRequestSchema,
+  type PatchTimeOffRequestInput,
+  type SubmitTimeOffRequestInput,
+  type TimeOffRequest,
 } from "@/shared/hcm/schemas";
 
-const NOT_IMPLEMENTED = "Request service not implemented — Phase 4+";
-
-function notImplemented(): never {
-  throw createHCMError({
-    code: HCM_ERROR_CODE.UNKNOWN,
-    message: NOT_IMPLEMENTED,
-    retryable: false,
-  });
-}
+const requestsListSchema = z
+  .object({ requests: z.array(timeOffRequestSchema) })
+  .strict();
 
 export async function submitTimeOffRequest(
   input: SubmitTimeOffRequestInput,
 ): Promise<TimeOffRequest> {
-  void input;
-  notImplemented();
+  return hcmPost(HCM_API.REQUEST.CREATE, input, timeOffRequestSchema);
 }
 
 export async function patchRequest(
   requestId: string,
   input: PatchTimeOffRequestInput,
 ): Promise<TimeOffRequest> {
-  void requestId;
-  void input;
-  notImplemented();
+  return hcmPatch(
+    HCM_API.REQUEST.BY_ID(requestId),
+    patchTimeOffRequestInputSchema.parse(input),
+    timeOffRequestSchema,
+  );
 }
 
 export async function fetchEmployeeRequests(
   employeeId: string,
 ): Promise<TimeOffRequest[]> {
-  void employeeId;
-  notImplemented();
+  const { requests } = await hcmGet(HCM_API.REQUEST.LIST, requestsListSchema);
+  return requests.filter((request) => request.employeeId === employeeId);
 }

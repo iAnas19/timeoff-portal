@@ -8,8 +8,12 @@ export const HCM_API = {
       `${HCM_BASE}/balances/${employeeId}/${locationId}`,
   },
   REQUEST: {
+    LIST: `${HCM_BASE}/requests`,
     CREATE: `${HCM_BASE}/requests`,
     BY_ID: (requestId: string) => `${HCM_BASE}/requests/${requestId}`,
+  },
+  APPROVAL: {
+    PENDING: `${HCM_BASE}/approvals/pending`,
   },
   SIMULATE: {
     ANNIVERSARY: `${HCM_BASE}/simulate/anniversary`,

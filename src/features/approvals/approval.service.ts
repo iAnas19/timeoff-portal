@@ -1,39 +1,42 @@
-import { createHCMError, HCM_ERROR_CODE } from "@/shared/api/errors";
-import type {
-  ApproveRequestInput,
-  DenyRequestInput,
-  PendingApprovalsResponse,
-  TimeOffRequest,
+import { hcmGet, hcmPatch } from "@/shared/api/client";
+import { REQUEST_STATUS } from "@/shared/hcm/constants";
+import { HCM_API } from "@/shared/hcm/endpoints";
+import {
+  approveRequestInputSchema,
+  denyRequestInputSchema,
+  pendingApprovalsResponseSchema,
+  patchTimeOffRequestInputSchema,
+  timeOffRequestSchema,
+  type ApproveRequestInput,
+  type DenyRequestInput,
+  type PendingApprovalsResponse,
+  type TimeOffRequest,
 } from "@/shared/hcm/schemas";
 
-const NOT_IMPLEMENTED = "Approval service not implemented — Phase 4+";
-
-function notImplemented(): never {
-  throw createHCMError({
-    code: HCM_ERROR_CODE.UNKNOWN,
-    message: NOT_IMPLEMENTED,
-    retryable: false,
-  });
-}
-
 export async function fetchPendingApprovals(): Promise<PendingApprovalsResponse> {
-  notImplemented();
+  return hcmGet(HCM_API.APPROVAL.PENDING, pendingApprovalsResponseSchema);
 }
 
 export async function approveRequest(
   requestId: string,
   input: ApproveRequestInput,
 ): Promise<TimeOffRequest> {
-  void requestId;
-  void input;
-  notImplemented();
+  approveRequestInputSchema.parse(input);
+  return hcmPatch(
+    HCM_API.REQUEST.BY_ID(requestId),
+    patchTimeOffRequestInputSchema.parse({ status: REQUEST_STATUS.APPROVED }),
+    timeOffRequestSchema,
+  );
 }
 
 export async function denyRequest(
   requestId: string,
   input: DenyRequestInput,
 ): Promise<TimeOffRequest> {
-  void requestId;
-  void input;
-  notImplemented();
+  denyRequestInputSchema.parse(input);
+  return hcmPatch(
+    HCM_API.REQUEST.BY_ID(requestId),
+    patchTimeOffRequestInputSchema.parse({ status: REQUEST_STATUS.DENIED }),
+    timeOffRequestSchema,
+  );
 }
