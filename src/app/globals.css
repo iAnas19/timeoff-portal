@@ -326,6 +326,12 @@ main {
   gap: 0.5rem;
 }
 
+.demo-panel-hint {
+  margin: 0.625rem 0 0;
+  font-size: 0.75rem;
+  color: var(--faint);
+}
+
 /* ---- Request form ---- */
 
 .request-form {
@@ -422,6 +428,20 @@ main {
 .empty-state {
   color: var(--muted);
   font-size: 0.9375rem;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: grid;
+  gap: 0.625rem;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+
+.about-list strong {
+  color: var(--ink);
+  font-weight: 600;
 }
 
 /* ---- Approvals ---- */

@@ -34,7 +34,7 @@ export { MOCK_AUTH_HEADER, MOCK_AUTH_VALUE, MOCK_AUTH_HEADERS };
 
 const HCM_PREFIX = "/api/hcm";
 
-// Explicit CORS allowlist — the dev app and Storybook. No wildcard origins.
+// Explicit CORS allowlist - the dev app and Storybook. No wildcard origins.
 const ALLOWED_ORIGINS = new Set([
   "http://localhost:3000",
   "http://localhost:6006",
@@ -107,7 +107,7 @@ async function readBody(request: Request): Promise<unknown> {
 
 /**
  * Single entry for Next.js routes and MSW. Handles CORS preflight, then auth,
- * rate limiting, and routing — and stamps CORS headers on every response.
+ * rate limiting, and routing - and stamps CORS headers on every response.
  */
 export async function handleHcmRequest(request: Request): Promise<Response> {
   const origin = request.headers.get("origin");

@@ -35,7 +35,7 @@ export type BalanceCardState = {
   status: BalanceDisplayStatus;
   message?: string;
   // A background poll is in flight. This is a quiet liveness hint, NOT a status
-  // change — flipping the whole card on every 30s poll reads as flicker.
+  // change - flipping the whole card on every 30s poll reads as flicker.
   isRefreshing?: boolean;
 };
 
@@ -123,7 +123,7 @@ export function useBalances(employeeId: string) {
 
   // Authoritative poll is always truth. Because this view never mutates
   // `confirmedBalance`, any change a poll reports is an external HCM refresh
-  // (e.g. anniversary bonus) — surface it as a non-intrusive banner without
+  // (e.g. anniversary bonus) - surface it as a non-intrusive banner without
   // clobbering an in-flight optimistic deduction (which is derived, not stored).
   useEffect(() => {
     locations.forEach((seed, index) => {
@@ -186,7 +186,7 @@ export function useBalances(employeeId: string) {
         );
       }
 
-      // Genuinely stale AND not currently refreshing — i.e. polling was paused
+      // Genuinely stale AND not currently refreshing - i.e. polling was paused
       // (tab backgrounded) and the value has aged past the poll interval. A
       // routine in-flight refetch is not "stale"; it's surfaced quietly below.
       if (query?.isStale && !query?.isFetching) {

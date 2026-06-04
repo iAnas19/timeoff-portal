@@ -5,7 +5,7 @@
 |-------|-------|
 | Version | 1.0 |
 | Status | Approved for implementation |
-| Stack | Next.js 16 (App Router), React 19, TypeScript strict, TanStack Query v5, Zustand, Zod |
+| Stack | Next.js 16 (App Router), React 19, TypeScript strict, TanStack Query v5, Zod |
 | Runtime | Node.js 24.14.1 |
 | Source of truth | External HCM (mocked locally) |
 
@@ -59,7 +59,7 @@ Page (thin)
 
 - **Pages** (`src/app/`) compose containers and pass route params only. No `useQuery`, no services.
 - **Features** (`balances`, `requests`, `approvals`) do not import each other. Shared code lives in `src/shared/`.
-- **Mocks** (`src/mocks/`) are first-class: fixtures, scenarios, MSW handlers, shared in-memory store for API routes.
+- **Mocks** (`src/mocks/`) are first-class: seed data, scenarios, MSW handlers, shared in-memory store for API routes.
 
 ### 3.2 Diagram
 
@@ -76,10 +76,10 @@ flowchart TB
   end
 
   subgraph state [Client state]
-    TQ[TanStack Query cache]
-    ZS[Zustand - UI chrome only]
-    BUF[Reconciliation buffer]
-    TQ --> BUF
+    TQ[TanStack Query cache - balances, requests]
+    OV[Overlay entries - separate keys, same cache]
+    LS[Component-local useState - form, dismissals]
+    TQ --> OV
   end
 
   subgraph data [Data layer]
@@ -96,7 +96,7 @@ flowchart TB
   EC --> TQ
   MC --> TQ
   TQ --> SVC --> CLI --> API
-  EC -.-> ZS
+  EC -.-> LS
 ```
 
 ---
@@ -136,6 +136,8 @@ flowchart TB
 Never show a **permanent** approved/denied state until `onSettled` completes and cache reflects refetched data.
 
 If refetch contradicts the prediction → surface **`hcm-silent-conflict`** (non-blocking notice), not a silent overwrite.
+
+**Mutations are never auto-retried.** The writes are non-idempotent — a `POST`/`PATCH` that times out may have already succeeded server-side, so an automatic retry would *duplicate* it. Failed writes surface to the user (rolled-back, with the cause); a manual retry is safe because they see the reconciled state first. (Reads/queries still retry on retryable errors — they're idempotent.)
 
 ### 5.2 Alternatives considered
 
@@ -320,9 +322,9 @@ Each approval card receives balance status at decision time (`PendingWithFreshBa
 | Silent fail | POST `/simulate/silent-fail` then write | Write 200; GET unchanged → client `SILENT_FAILURE` on settle |
 | Conflict | POST `/simulate/conflict` then write | 409 `CONFLICT` |
 | Slow | POST `/simulate/slow` | 6–12s delay; loading states |
-| Concurrent poll + mutation | Anniversary during submit | Buffer holds poll until settle |
+| Concurrent poll + mutation | Anniversary during submit | Poll writes truth; the optimistic deduction is derived on top, so they compose without clobbering (see §7.2) |
 
-Seed data: fixed `employeeId` / `locationId` values in `src/mocks/fixtures/`.
+Seed data: fixed `employeeId` / `locationId` values in `src/mocks/seed.ts`.
 
 ---
 
@@ -332,7 +334,7 @@ Seed data: fixed `employeeId` / `locationId` values in `src/mocks/fixtures/`.
 |-------|------|--------|------------------------|
 | Pure utils | Vitest | `applyOptimisticDeduction`, reconciliation, silent-fail detection | Math bugs are silent and cheap to test |
 | Services | Vitest + MSW | Zod strict parsing, every `HCMErrorCode` mapping | Contract drift breaks all features |
-| Container hooks | Vitest + RTL | Optimistic rollback, `onSettled` invalidation, buffer flush | Highest business-logic density |
+| Container hooks | Vitest + RTL | Optimistic rollback, `onSettled` invalidation, overlay composition | Highest business-logic density |
 | UI states | Storybook `play` | All `BalanceDisplayStatus` + form/approval states | PM-visible; catches missing states |
 | E2E | Playwright | Submit→approve; anniversary mid-session; **silent fail recovery** | Only layer proving full pipeline |
 
@@ -346,7 +348,7 @@ Tests reset MSW handlers and Query cache per test. Line coverage is a floor; **b
 
 | Area | Requirement |
 |------|-------------|
-| Config | `shared/config/config.ts` only reads `process.env`; fail at startup if invalid |
+| Config | `shared/config/config.ts` only reads `process.env`; Zod-validates shape, defaults when unset (so CI/Vercel prerender builds), rejects malformed values |
 | Route handlers | Mock auth check first; Zod body validation → 400; **fixed-window rate limit on mutations** (POST/PATCH) → 429 |
 | Client | No tokens in `localStorage`; no employee ID or balance in URL query params |
 | Logging | No PII/balances in production console |
@@ -355,13 +357,26 @@ Tests reset MSW handlers and Query cache per test. Line coverage is a floor; **b
 
 ---
 
-## 14. Out of scope
+## 14. Assumptions & deliberate decisions
 
-- Real Workday/SAP integration
-- Production identity provider (mock auth gate sufficient)
-- i18n / localization
-- Native mobile apps
-- Manager hierarchy / delegation rules beyond pending queue
+These are conscious scope choices, not oversights. Two of them follow directly from the
+core principle that **HCM owns the numbers** — the frontend doesn't reimplement policy the
+source of truth would compute.
+
+- **Days = inclusive calendar days, not business days.** Working-day and holiday calendars
+  are per-location policy the HCM owns; the frontend deliberately doesn't reinvent (and risk
+  getting wrong) what the source of truth computes.
+- **Same-day leave can co-exist across different locations.** Per-location balances are
+  independent, so overlap is rejected only *within* a location. "Can one person be absent
+  across two locations on the same day?" is an aggregate rule the HCM would own.
+- **No past-dated requests.** Blocked for demo clarity. A real system might allow a
+  back-dating window (sudden/sick leave) — a product decision, intentionally out of scope.
+
+### Out of scope
+
+Real Workday/SAP integration · production identity provider (mock auth gate suffices) ·
+i18n · native mobile · manager hierarchy/delegation beyond the pending queue · a persistent
+backing store (the mock HCM is in-memory).
 
 ---
 

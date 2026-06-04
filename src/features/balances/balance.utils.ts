@@ -99,7 +99,7 @@ export function detectSilentFailure(input: SilentFailureCheckInput): boolean {
 /**
  * True when an authoritative poll reports a `confirmedBalance` that differs from
  * what we last observed for this cell. This view never mutates `confirmedBalance`
- * itself (submit only touches pending deductions), so any change is external —
+ * itself (submit only touches pending deductions), so any change is external -
  * an HCM-side refresh that should surface the `refreshed-mid-session` banner.
  */
 export function detectExternalConfirmedChange(

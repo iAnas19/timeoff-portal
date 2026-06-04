@@ -3,7 +3,7 @@ import { AppProviders } from "@/shared/lib/AppProviders";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "ExampleHR — Time Off",
+  title: "ExampleHR - Time Off",
   description: "Time-off balances and requests with HCM reconciliation",
 };
 

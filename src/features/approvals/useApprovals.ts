@@ -14,6 +14,7 @@ import {
   APPROVAL_CARD_STATUS,
   BALANCE_CELL_STALE_TIME_MS,
   BALANCE_FRESHNESS,
+  BALANCE_POLL_INTERVAL_MS,
   REQUEST_LIST_STALE_TIME_MS,
 } from "@/shared/hcm/constants";
 import {
@@ -57,6 +58,9 @@ export function useApprovals() {
           approval.request.locationId,
         ),
       staleTime: BALANCE_CELL_STALE_TIME_MS,
+      // Keep the manager's balance context valid at decision time, not minutes old.
+      refetchInterval: BALANCE_POLL_INTERVAL_MS,
+      refetchIntervalInBackground: false,
       enabled: queueQuery.isSuccess,
     })),
   });

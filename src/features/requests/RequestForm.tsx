@@ -94,13 +94,13 @@ export function RequestFormView({
       return "Pick a start and end date.";
     }
     if (countInclusiveDays(startDate, endDate) === 0) {
-      return "End date can’t be before the start date.";
+      return "End date can't be before the start date.";
     }
     if (startDate < today) {
-      return "Start date can’t be in the past.";
+      return "Start date can't be in the past.";
     }
     if (requestedDays > maxDays) {
-      return `A single request can’t exceed ${maxDays} days.`;
+      return `A single request can't exceed ${maxDays} days.`;
     }
     if (requestedDays > available) {
       return `Only ${available} day${available === 1 ? "" : "s"} available at ${selected?.locationName}.`;
@@ -162,7 +162,7 @@ export function RequestFormView({
 
       {allExhausted ? (
         <p className="empty-state">
-          Every location is fully booked — no balance left to request against.
+          Every location is fully booked - no balance left to request against.
         </p>
       ) : (
         <form className="form-grid" onSubmit={handleSubmit}>
@@ -182,7 +182,7 @@ export function RequestFormView({
                   value={option.locationId}
                   disabled={option.available <= 0}
                 >
-                  {option.locationName} —{" "}
+                  {option.locationName} -{" "}
                   {option.available > 0
                     ? `${option.available} day${option.available === 1 ? "" : "s"} available`
                     : "exhausted"}

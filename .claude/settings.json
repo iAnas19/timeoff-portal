@@ -14,7 +14,14 @@
       "Bash(curl -s -o /dev/null -w \"mockServiceWorker.js -> %{http_code}\\\\n\" http://localhost:6006/mockServiceWorker.js)",
       "Bash(grep -vE \"^$|^>|examplehr|eslint \\\\.\")",
       "Bash(npm audit *)",
-      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);const v=j.metadata.vulnerabilities;console.log\\(JSON.stringify\\(v\\)\\)}catch\\(e\\){console.log\\('parse err'\\)}}\\)\")"
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);const v=j.metadata.vulnerabilities;console.log\\(JSON.stringify\\(v\\)\\)}catch\\(e\\){console.log\\('parse err'\\)}}\\)\")",
+      "Bash(powershell -NoProfile -Command 'Get-NetTCPConnection -LocalPort 6006 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { try { Stop-Process -Id $_ -Force -ErrorAction Stop } catch {} }')",
+      "Bash(node -e \"const fs=require\\('fs'\\),p=require\\('path'\\);let n=0;function walk\\(d\\){for\\(const f of fs.readdirSync\\(d\\)\\){const fp=p.join\\(d,f\\);const st=fs.statSync\\(fp\\);if\\(st.isDirectory\\(\\)\\)walk\\(fp\\);else if\\(/\\\\.\\(ts|tsx\\)$/.test\\(f\\)\\){const o=fs.readFileSync\\(fp,'utf8'\\);const s=o.replace\\(/—/g,'-'\\).replace\\(/’/g,String.fromCharCode\\(39\\)\\);if\\(s!==o\\){fs.writeFileSync\\(fp,s\\);n++;console.log\\('fixed',fp\\)}}}walk\\('src'\\);console.log\\('files changed:',n\\);\")",
+      "Bash(node _strip.mjs)",
+      "Bash(npx tsc *)",
+      "Bash(sed -n '70,80p' src/features/balances/balance.utils.ts)",
+      "Bash(sed -n '32,44p' src/features/requests/useSubmitRequest.ts)",
+      "Bash(node _shot.mjs)"
     ]
   }
 }

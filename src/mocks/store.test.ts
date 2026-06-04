@@ -1,4 +1,13 @@
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from "vitest";
 import { HCM_ERROR_CODE } from "@/shared/api/errors";
 import { HCM_API } from "@/shared/hcm/endpoints";
 import { REQUEST_STATUS } from "@/shared/hcm/constants";
@@ -6,8 +15,10 @@ import { MOCK_AUTH_HEADERS } from "@/mocks/mswHandlers";
 import { handleHcmRequest } from "@/mocks/router";
 import { hcmServer } from "@/mocks/server";
 import {
+  applySlowDelayIfArmed,
   armConflict,
   armSilentFail,
+  armSlow,
   createRequest,
   getBatch,
   getCell,
@@ -134,6 +145,33 @@ describe("mock HCM store", () => {
         expect(error.hcmError.code).toBe(HCM_ERROR_CODE.CONFLICT);
         expect(error.status).toBe(409);
       }
+    }
+  });
+
+  it("slow delays the next request once, then disarms", async () => {
+    vi.useFakeTimers();
+    try {
+      armSlow();
+
+      let firstDone = false;
+      const first = applySlowDelayIfArmed().then(() => {
+        firstDone = true;
+      });
+      await Promise.resolve();
+      expect(firstDone).toBe(false); // still delaying
+
+      await vi.advanceTimersByTimeAsync(12_000); // covers the 6-12s window
+      await first;
+      expect(firstDone).toBe(true);
+
+      // one-shot: the next call resolves immediately (no pending timer)
+      let secondDone = false;
+      await applySlowDelayIfArmed().then(() => {
+        secondDone = true;
+      });
+      expect(secondDone).toBe(true);
+    } finally {
+      vi.useRealTimers();
     }
   });
 

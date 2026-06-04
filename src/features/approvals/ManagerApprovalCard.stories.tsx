@@ -84,7 +84,7 @@ export const ConflictOnApprove: Story = {
   name: "ManagerApprovalCard/ConflictOnApprove",
   args: {
     status: APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE,
-    message: "Write conflict — retry later",
+    message: "Write conflict - retry later",
   },
   play: async ({ canvasElement }) => {
     await expect(

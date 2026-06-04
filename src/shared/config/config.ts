@@ -18,7 +18,7 @@ export type AppConfig = z.infer<typeof configSchema>;
 
 /**
  * The mock HCM is co-located (`/api/hcm`) and the browser talks to it with relative
- * paths, so `HCM_API_URL` is a placeholder that defaults to the local mock — the build
+ * paths, so `HCM_API_URL` is a placeholder that defaults to the local mock - the build
  * must not hard-fail when it is unset (CI / Vercel prerender `/employee` without a .env).
  * The schema still validates the *shape* if a value is provided. Point it at a real HCM
  * by setting `HCM_API_URL` explicitly; in that case a deploy would reinstate strict checks.

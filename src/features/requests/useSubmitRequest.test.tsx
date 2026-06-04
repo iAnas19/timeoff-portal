@@ -11,9 +11,10 @@ import {
   it,
 } from "vitest";
 import { useBalances } from "@/features/balances/useBalances";
+import type { BalanceCardState } from "@/features/balances/useBalances";
 import { useSubmitRequest } from "@/features/requests/useSubmitRequest";
 import { hcmServer } from "@/mocks/server";
-import { armSilentFail, resetStore } from "@/mocks/store";
+import { armConflict, armSilentFail, resetStore } from "@/mocks/store";
 import { SEED_IDS } from "@/mocks/seed";
 import {
   BALANCE_DISPLAY_STATUS,
@@ -41,7 +42,7 @@ function makeWrapper() {
   return { Wrapper };
 }
 
-// Both hooks share a cache the way the employee page mounts them — useBalances
+// Both hooks share a cache the way the employee page mounts them - useBalances
 // populates the per-cell key that useSubmitRequest snapshots for reconciliation.
 function renderEmployeePage() {
   const { Wrapper } = makeWrapper();
@@ -51,10 +52,10 @@ function renderEmployeePage() {
   );
 }
 
-function nycCard(result: { current: { balances: { cards: { locationId: string }[] } } }) {
-  return result.current.balances.cards.find(
-    (card) => (card as { locationId: string }).locationId === NYC,
-  );
+function nycCard(result: {
+  current: { balances: { cards: BalanceCardState[] } };
+}): BalanceCardState | undefined {
+  return result.current.balances.cards.find((card) => card.locationId === NYC);
 }
 
 describe("useSubmitRequest", () => {
@@ -130,6 +131,55 @@ describe("useSubmitRequest", () => {
         BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK,
       ),
     );
+  });
+
+  it("rolls back (with the reason) when HCM returns a write conflict", async () => {
+    const { result } = renderEmployeePage();
+
+    await waitFor(() =>
+      expect(nycCard(result)?.status).toBe(BALANCE_DISPLAY_STATUS.SUCCESS),
+    );
+
+    armConflict(); // next write returns 409
+
+    act(() => result.current.submit.submit(VALID_REQUEST));
+
+    await waitFor(() =>
+      expect(result.current.submit.formStatus).toBe(
+        REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK,
+      ),
+    );
+    expect(result.current.submit.statusMessage).toMatch(/conflict|retry/i);
+    await waitFor(() =>
+      expect(nycCard(result)?.status).toBe(
+        BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK,
+      ),
+    );
+  });
+
+  it("rolls back a duplicate/overlapping request with a clear message", async () => {
+    // Seed has a pending Alice/NYC request for 2026-07-01..02.
+    const { result } = renderEmployeePage();
+
+    await waitFor(() =>
+      expect(nycCard(result)?.status).toBe(BALANCE_DISPLAY_STATUS.SUCCESS),
+    );
+
+    act(() =>
+      result.current.submit.submit({
+        locationId: NYC,
+        days: 2,
+        startDate: "2026-07-02",
+        endDate: "2026-07-03",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(result.current.submit.formStatus).toBe(
+        REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK,
+      ),
+    );
+    expect(result.current.submit.statusMessage).toMatch(/already covers/i);
   });
 
   it("rejects invalid client input before any network call", async () => {

@@ -65,6 +65,12 @@ describe("applyOptimisticDeduction", () => {
 
     expect(next).toEqual(SAMPLE_BALANCES);
   });
+
+  it("returns undefined when there is no current data", () => {
+    expect(
+      applyOptimisticDeduction(undefined, { locationId: "loc-nyc", days: 1 }),
+    ).toBeUndefined();
+  });
 });
 
 describe("reconciliation helpers", () => {

@@ -27,6 +27,22 @@ type SubmitContext = {
   cellKey: ReturnType<typeof BALANCE_KEYS.byEmployeeAndLocation>;
 };
 
+// Name the cause so "rolled back" tells the user *why*, not just "it failed".
+// INSUFFICIENT/INVALID/CONFLICT already carry a specific server message
+// (CONFLICT covers both write-conflicts and duplicate-date bookings).
+function rollbackMessage(error: unknown): string {
+  if (isHCMError(error)) {
+    if (error.code === HCM_ERROR_CODE.TIMEOUT) {
+      return "We couldn't reach the HR system in time - nothing changed. Please try again.";
+    }
+    if (error.code === HCM_ERROR_CODE.NETWORK) {
+      return "We couldn't reach the HR system - nothing changed. Please try again.";
+    }
+    return error.message;
+  }
+  return "Something went wrong and your request didn't go through. Your balance is unchanged.";
+}
+
 export function useSubmitRequest(employeeId: string) {
   const queryClient = useQueryClient();
   const [formStatus, setFormStatus] = useState<RequestFormStatus>(
@@ -45,7 +61,7 @@ export function useSubmitRequest(employeeId: string) {
     mutationFn: submitTimeOffRequest,
     onMutate: async (variables): Promise<SubmitContext> => {
       // Snapshot the pre-mutation cell so onSettled can reconcile against it.
-      // We do NOT write the optimistic value into the cache — the deduction is
+      // We do NOT write the optimistic value into the cache - the deduction is
       // derived in useBalances from the pending mutation, so a concurrent poll
       // can never clobber it.
       const cellKey = BALANCE_KEYS.byEmployeeAndLocation(
@@ -68,14 +84,13 @@ export function useSubmitRequest(employeeId: string) {
       };
     },
     onError: (error, variables) => {
+      const message = rollbackMessage(error);
+
       setBalanceOverlay(
         queryClient,
         variables.employeeId,
         variables.locationId,
-        {
-          status: BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK,
-          message: "Your request did not apply. Balance restored.",
-        },
+        { status: BALANCE_DISPLAY_STATUS.OPTIMISTIC_ROLLED_BACK, message },
       );
 
       if (
@@ -88,9 +103,7 @@ export function useSubmitRequest(employeeId: string) {
         setFormStatus(REQUEST_FORM_STATUS.SUBMIT_ROLLED_BACK);
       }
 
-      setStatusMessage(
-        isHCMError(error) ? error.message : "Request failed. Try again.",
-      );
+      setStatusMessage(message);
     },
     onSettled: async (_data, error, variables, context) => {
       await queryClient.invalidateQueries({

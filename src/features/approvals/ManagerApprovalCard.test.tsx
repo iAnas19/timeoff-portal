@@ -86,8 +86,21 @@ describe("ManagerApprovalCard", () => {
 
   it("surfaces a conflict-on-approve message", () => {
     setup(APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE, {
-      message: "Write conflict — retry later",
+      message: "Write conflict - retry later",
     });
     expect(screen.getByText(/retry later/i)).toBeInTheDocument();
+  });
+
+  it("shows the processing label while approving", () => {
+    setup(APPROVAL_CARD_STATUS.APPROVING, { message: "Approving…" });
+    expect(screen.getByText("Processing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /approve/i })).toBeDisabled();
+  });
+
+  it("shows the denied result", () => {
+    setup(APPROVAL_CARD_STATUS.DENIED);
+    expect(document.querySelector(".approval-result-denied")).toHaveTextContent(
+      "Denied",
+    );
   });
 });

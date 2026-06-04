@@ -54,3 +54,7 @@ export async function armSilentFailScenario(): Promise<void> {
 export async function armConflictScenario(): Promise<void> {
   await hcmPost(HCM_API.SIMULATE.CONFLICT, {}, simulateArmedSchema);
 }
+
+export async function armSlowScenario(): Promise<void> {
+  await hcmPost(HCM_API.SIMULATE.SLOW, {}, simulateArmedSchema);
+}

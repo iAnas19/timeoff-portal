@@ -7,7 +7,7 @@ vs. authoritative HCM truth) is the highest-risk area and gets the deepest cover
 ## How to run
 
 ```bash
-npm test               # Vitest: unit + component + service + container-hook (71 tests)
+npm test               # Vitest: unit + component + service + container-hook (143 tests)
 npm run test:coverage  # Vitest with v8 coverage → ./coverage (html + lcov)
 npm run test:e2e       # Playwright: 3 end-to-end flows against a production build
 npm run storybook      # Storybook UI-state matrix (then, in another shell:)
@@ -17,12 +17,22 @@ npm run test-storybook # run every story's play/smoke test headlessly (needs Sto
 ## Coverage snapshot (v8)
 
 ```
-Statements : 79.9%   Branches : 68.9%   Functions : 79.8%   Lines : 80.0%
+Statements : 96.4%   Branches : 88.2%   Functions : 97.8%   Lines : 96.5%
 ```
 
-Thin route/page shells (`src/app/**`) and generated files are excluded; the mock HCM,
-features, hooks, utils, and shared client are all included. Report: `coverage/index.html`.
-Per the brief, line coverage is a floor — the **behavioral matrix** below is the goal.
+![Coverage report](images/coverage.png)
+
+Generated with `npm run test:coverage` (v8 provider → `coverage/index.html`).
+
+Thin route/page shells (`src/app/**`), the browser-only MSW worker (`mocks/browser.ts`),
+and generated files are excluded; the mock HCM, features, hooks, utils, and shared client
+are all included. Report: `coverage/index.html`. Per the brief, line coverage is a floor —
+the **behavioral matrix** below is the goal, and it is fully covered. The remaining ~3–4%
+is intentionally left: unreachable defensive guards (invariant `fail()`s the public API
+can't trigger, switch `default` cases, the non-`HCMError` fallback the client never
+produces) and timing-transient UI states (a card showing "Approving"/"Denied" for the
+instant before the queue refetch removes it). Covering those would mean brittle,
+contrived tests with no regression value.
 
 ## What each layer guards
 
@@ -50,6 +60,10 @@ Per the brief, line coverage is a floor — the **behavioral matrix** below is t
 - **No double-booking**: overlapping dates for the same cell are rejected (409).
 - **Manager decides on a valid balance** (`useApprovals`): `pending-fresh-balance` vs
   `pending-stale-balance`, `conflict-on-approve` on 409, and the request leaves the queue on success.
+- **Conflict / slow / duplicate are covered end to end**: conflict on submit *and* approve,
+  the slow scenario's one-shot delay (`store`), duplicate-overlap rejection, and — critically —
+  a guard that **mutations never auto-retry** (`createQueryClient`), so a timed-out non-idempotent
+  write can't be duplicated into two entries.
 
 ## Determinism
 

@@ -52,7 +52,7 @@ export async function hcmFetch<T>(
   const method = options.method ?? "GET";
   const controller = new AbortController();
   const timeoutMs = config.HCM_API_TIMEOUT_MS;
-  // Flag the abort cause ourselves — the thrown error's shape varies by runtime
+  // Flag the abort cause ourselves - the thrown error's shape varies by runtime
   // (DOMException vs TypeError), so we cannot reliably sniff it after the fact.
   let didTimeout = false;
   const timeoutId = setTimeout(() => {

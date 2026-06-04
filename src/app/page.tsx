@@ -14,6 +14,9 @@ export default function HomePage() {
         <li>
           <Link href="/manager">Manager - approvals</Link>
         </li>
+        <li>
+          <Link href="/about">About - how it works &amp; assumptions</Link>
+        </li>
       </ul>
     </main>
   );

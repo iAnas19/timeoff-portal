@@ -92,7 +92,7 @@ export function enforceWriteRateLimit(): void {
     throw {
       hcmError: createHCMError({
         code: HCM_ERROR_CODE.UNKNOWN,
-        message: "Too many writes — slow down and retry.",
+        message: "Too many writes - slow down and retry.",
         retryable: true,
       }),
       status: 429,
@@ -147,7 +147,7 @@ export function writeCell(
 
   if (armed.conflict) {
     armed.conflict = false;
-    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict — retry later", 409);
+    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict - retry later", 409);
   }
 
   const nextCell = refreshAsOf({
@@ -177,11 +177,11 @@ export function createRequest(input: SubmitTimeOffRequestInput): TimeOffRequest 
 
   if (armed.conflict) {
     armed.conflict = false;
-    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict — retry later", 409);
+    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict - retry later", 409);
   }
 
   // Reject a request whose dates overlap one that is already pending or approved
-  // for this employee + location — you cannot book the same day twice.
+  // for this employee + location - you cannot book the same day twice.
   const hasOverlap = requests.some(
     (existing) =>
       existing.employeeId === input.employeeId &&
@@ -248,7 +248,7 @@ export function patchRequest(
 
   if (armed.conflict) {
     armed.conflict = false;
-    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict — retry later", 409);
+    fail(HCM_ERROR_CODE.CONFLICT, "Write conflict - retry later", 409);
   }
 
   const request = requests[requestIndex];

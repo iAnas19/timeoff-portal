@@ -8,7 +8,11 @@ export default defineConfig({
     environment: "jsdom",
     setupFiles: ["./src/tests/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
-    pool: "threads",
+    // Forks (separate processes) instead of worker threads: the suite mounts many
+    // jsdom + React Query (polling) + MSW environments, and under that memory
+    // pressure a worker thread can crash and cascade into "failed to find the
+    // current suite" (zeroing the whole run). Process isolation is the reliable fix.
+    pool: "forks",
     coverage: {
       provider: "v8",
       reporter: ["text-summary", "html", "lcov"],
@@ -19,6 +23,7 @@ export default defineConfig({
         "src/**/*.stories.tsx",
         "src/tests/**",
         "src/app/**", // thin route/page shells — exercised by e2e, not unit
+        "src/mocks/browser.ts", // MSW setupWorker — browser-only glue, can't run in Node
         "src/**/*.d.ts",
       ],
     },

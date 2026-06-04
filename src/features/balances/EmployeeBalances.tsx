@@ -6,6 +6,7 @@ import { useBalances } from "@/features/balances/useBalances";
 import {
   armConflictScenario,
   armSilentFailScenario,
+  armSlowScenario,
   simulateAnniversary,
 } from "@/features/balances/balance.service";
 import { BALANCE_DISPLAY_STATUS } from "@/shared/hcm/constants";
@@ -64,7 +65,7 @@ export function BalanceCard({
           </p>
           <dl className="balance-meta">
             <div>
-              <dt>Confirmed</dt>
+              <dt>Granted</dt>
               <dd>{confirmedBalance}</dd>
             </div>
             <div>
@@ -132,7 +133,7 @@ function statusLabel(status: BalanceDisplayStatus): string {
     case BALANCE_DISPLAY_STATUS.HCM_REJECTED:
       return "Rejected";
     case BALANCE_DISPLAY_STATUS.HCM_SILENT_CONFLICT:
-      return "Conflict";
+      return "Not applied";
     case BALANCE_DISPLAY_STATUS.REFRESHED_MID_SESSION:
       return "Updated";
     case BALANCE_DISPLAY_STATUS.ERROR:
@@ -151,6 +152,7 @@ type EmployeeBalancesViewProps = {
   onSimulateAnniversary: () => void;
   onArmSilentFail: () => void;
   onArmConflict: () => void;
+  onArmSlow: () => void;
   isSimulating: boolean;
 };
 
@@ -161,6 +163,7 @@ function EmployeeBalancesView({
   onSimulateAnniversary,
   onArmSilentFail,
   onArmConflict,
+  onArmSlow,
   isSimulating,
 }: EmployeeBalancesViewProps) {
   if (isLoading && cards.length === 0) {
@@ -220,7 +223,17 @@ function EmployeeBalancesView({
           >
             Arm conflict
           </Button>
+          <Button
+            variant="secondary"
+            disabled={isSimulating}
+            onClick={onArmSlow}
+          >
+            Arm slow
+          </Button>
         </div>
+        <p className="demo-panel-hint">
+          Arm a scenario, then submit a request (or wait for the 30s poll) to see it.
+        </p>
       </div>
     </section>
   );
@@ -237,13 +250,17 @@ export default function EmployeeBalancesContainer({
   const { cards, isLoading, clearOverlay } = useBalances(employeeId);
 
   const simulateMutation = useMutation({
-    mutationFn: async (action: "anniversary" | "silent-fail" | "conflict") => {
+    mutationFn: async (
+      action: "anniversary" | "silent-fail" | "conflict" | "slow",
+    ) => {
       if (action === "anniversary") {
         await simulateAnniversary(employeeId);
       } else if (action === "silent-fail") {
         await armSilentFailScenario();
-      } else {
+      } else if (action === "conflict") {
         await armConflictScenario();
+      } else {
+        await armSlowScenario();
       }
     },
     onSettled: async () => {
@@ -261,6 +278,7 @@ export default function EmployeeBalancesContainer({
       onSimulateAnniversary={() => simulateMutation.mutate("anniversary")}
       onArmSilentFail={() => simulateMutation.mutate("silent-fail")}
       onArmConflict={() => simulateMutation.mutate("conflict")}
+      onArmSlow={() => simulateMutation.mutate("slow")}
       isSimulating={simulateMutation.isPending}
     />
   );
