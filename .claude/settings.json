@@ -9,7 +9,12 @@
       "Bash(break)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:3000/manager)",
       "Bash(curl -s -H \"x-mock-auth: examplehr-mock\" http://localhost:3000/api/hcm/balances/batch)",
-      "Bash(curl -s http://localhost:3000/employee)"
+      "Bash(curl -s http://localhost:3000/employee)",
+      "Bash(npx msw *)",
+      "Bash(curl -s -o /dev/null -w \"mockServiceWorker.js -> %{http_code}\\\\n\" http://localhost:6006/mockServiceWorker.js)",
+      "Bash(grep -vE \"^$|^>|examplehr|eslint \\\\.\")",
+      "Bash(npm audit *)",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\).on\\('end',\\(\\)=>{try{const j=JSON.parse\\(d\\);const v=j.metadata.vulnerabilities;console.log\\(JSON.stringify\\(v\\)\\)}catch\\(e\\){console.log\\('parse err'\\)}}\\)\")"
     ]
   }
 }

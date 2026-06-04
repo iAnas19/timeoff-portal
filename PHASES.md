@@ -42,12 +42,19 @@ Copy this block and update after each phase:
 [x] Phase 5 — Balances feature (employee view foundation)
 [x] Phase 6 — Requests feature (employee submit flow)
 [x] Phase 7 — Approvals feature (manager view) + Storybook matrix
-[~] Phase 8 — Test suite — DONE: utils, mock store, service+MSW error-mapping (every HCMErrorCode),
-              container-hook tests (useBalances reconciliation, useSubmitRequest incl. dedicated
-              silent-failure test, useApprovals). REMAINING: Storybook play as a CI test runner
-              (vitest-storybook or test-runner) and Playwright e2e (submit→approve, anniversary,
-              silent-fail recovery).
-[ ] Phase 9 — CI, coverage proof, Storybook deploy, README
+[x] Phase 8 — Test suite — utils, mock store, service+MSW (every HCMErrorCode), container-hook
+              tests (reconciliation, dedicated silent-failure, useApprovals), component (RTL)
+              tests, v8 coverage (~80% lines), Storybook test-runner (24 stories), Playwright
+              e2e (submit→approve, anniversary, silent-fail recovery — serial, prod build).
+[x] Phase 9 — CI (GitHub Actions: lint + coverage + build + npm audit + e2e + storybook),
+              Vercel deploy documented (app = SSR Next.js, no rewrite config needed),
+              README rewritten.
+
+NOTE (post-audit hardening): docs now match code. Zustand/immer removed (were unused; TRD §4 +
+.cursorrules §7 reframed as "considered, deferred"). Mock HCM enforces a fixed-window write
+rate limit (429) + explicit CORS allowlist + OPTIONS preflight (TRD §13). Dead `writeBalance`
+removed. Duplicate-overlap booking rejected (409). Fixed: `<p><div>` (Spinner) hydration error,
+perpetual-`stale`, overlay-wipe on invalidation, fragile timeout detection.
 
 NOTE (architecture correction): the reconciliation "buffer" described in early phases was reworked.
 The per-cell poll is now the always-authoritative cache value; the optimistic deduction is DERIVED

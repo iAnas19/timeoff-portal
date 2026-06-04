@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/nextjs";
-import { expect, userEvent, within } from "storybook/test";
+import { expect, within } from "storybook/test";
 import { ManagerApprovalCard } from "@/features/approvals/ManagerApprovals";
 import { APPROVAL_CARD_STATUS, BALANCE_FRESHNESS, REQUEST_STATUS } from "@/shared/hcm/constants";
 
@@ -88,7 +88,7 @@ export const ConflictOnApprove: Story = {
   },
   play: async ({ canvasElement }) => {
     await expect(
-      within(canvasElement).getByText(/conflict/i),
+      within(canvasElement).getByText(/retry later/i),
     ).toBeInTheDocument();
   },
 };

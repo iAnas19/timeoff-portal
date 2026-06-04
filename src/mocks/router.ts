@@ -12,12 +12,14 @@ import {
   armSilentFail,
   armSlow,
   createRequest,
+  enforceWriteRateLimit,
   getBatch,
   getCell,
   getPendingApprovals,
   isStoreRouteError,
   listRequests,
   patchRequest,
+  resetStore,
   simulateAnniversary,
   writeCell,
 } from "@/mocks/store";
@@ -31,6 +33,35 @@ import {
 export { MOCK_AUTH_HEADER, MOCK_AUTH_VALUE, MOCK_AUTH_HEADERS };
 
 const HCM_PREFIX = "/api/hcm";
+
+// Explicit CORS allowlist — the dev app and Storybook. No wildcard origins.
+const ALLOWED_ORIGINS = new Set([
+  "http://localhost:3000",
+  "http://localhost:6006",
+  "http://127.0.0.1:3000",
+]);
+const ALLOWED_METHODS = "GET, POST, PATCH, OPTIONS";
+const ALLOWED_HEADERS = `Content-Type, x-request-id, ${MOCK_AUTH_HEADER}`;
+const CORS_MAX_AGE_SECONDS = "600";
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  if (!origin || !ALLOWED_ORIGINS.has(origin)) {
+    return {};
+  }
+  return {
+    "Access-Control-Allow-Origin": origin,
+    "Access-Control-Allow-Methods": ALLOWED_METHODS,
+    "Access-Control-Allow-Headers": ALLOWED_HEADERS,
+    "Vary": "Origin",
+  };
+}
+
+function applyCors(response: Response, origin: string | null): Response {
+  for (const [key, value] of Object.entries(corsHeaders(origin))) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
 
 const simulateAnniversarySchema = z
   .object({ employeeId: z.string().min(1) })
@@ -74,8 +105,27 @@ async function readBody(request: Request): Promise<unknown> {
   }
 }
 
-/** Single entry for Next.js routes and MSW — matches path + method, calls store. */
+/**
+ * Single entry for Next.js routes and MSW. Handles CORS preflight, then auth,
+ * rate limiting, and routing — and stamps CORS headers on every response.
+ */
 export async function handleHcmRequest(request: Request): Promise<Response> {
+  const origin = request.headers.get("origin");
+
+  if (request.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204,
+      headers: {
+        ...corsHeaders(origin),
+        "Access-Control-Max-Age": CORS_MAX_AGE_SECONDS,
+      },
+    });
+  }
+
+  return applyCors(await routeHcmRequest(request), origin);
+}
+
+async function routeHcmRequest(request: Request): Promise<Response> {
   if (request.headers.get(MOCK_AUTH_HEADER) !== MOCK_AUTH_VALUE) {
     return jsonError(
       createHCMError({
@@ -96,6 +146,9 @@ export async function handleHcmRequest(request: Request): Promise<Response> {
   const method = request.method;
 
   try {
+    if (method === "POST" || method === "PATCH") {
+      enforceWriteRateLimit();
+    }
     await applySlowDelayIfArmed();
 
     if (method === "GET" && subPath === "/balances/batch") {
@@ -166,6 +219,12 @@ export async function handleHcmRequest(request: Request): Promise<Response> {
     if (method === "POST" && subPath === "/simulate/slow") {
       armSlow();
       return jsonOk({ armed: true });
+    }
+
+    // Test-only: reset the in-memory store to seed (used by E2E specs for isolation).
+    if (method === "POST" && subPath === "/simulate/reset") {
+      resetStore();
+      return jsonOk({ reset: true });
     }
 
     return jsonError(

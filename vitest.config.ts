@@ -9,6 +9,19 @@ export default defineConfig({
     setupFiles: ["./src/tests/setup.ts"],
     include: ["src/**/*.test.{ts,tsx}"],
     pool: "threads",
+    coverage: {
+      provider: "v8",
+      reporter: ["text-summary", "html", "lcov"],
+      reportsDirectory: "./coverage",
+      include: ["src/**/*.{ts,tsx}"],
+      exclude: [
+        "src/**/*.test.{ts,tsx}",
+        "src/**/*.stories.tsx",
+        "src/tests/**",
+        "src/app/**", // thin route/page shells — exercised by e2e, not unit
+        "src/**/*.d.ts",
+      ],
+    },
     env: {
       HCM_API_URL: "http://localhost:3000",
       HCM_API_TIMEOUT_MS: "2000",

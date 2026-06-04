@@ -187,12 +187,12 @@ Rules:
 - Optimistic updates must snapshot the previous cache in `onMutate` and restore it in `onError`.
 - On `onSuccess`, always invalidate or surgically update the cache. Never assume HCM echoes back the correct value.
 
-### Client UI State — Zustand
+### Client UI State
 
-- Zustand is only for UI state: panel open/closed, active tab, confirmation modal visibility.
-- Never store balance values, request data, or any server-derived data in Zustand.
-- Every Zustand store must be scoped to its feature. No global mega-store.
-- Stores use the `immer` middleware for nested updates and `devtools` middleware in development.
+- Default to **component-local `useState`** for UI state (form fields, selected location, dismissable banners). Don't add a global store until genuine cross-component UI state exists.
+- Reconciliation banners are stored as **entries in the Query cache** keyed per cell (outside the `balances` key tree), so they flow through the same invalidation/dismissal path as the data they annotate.
+- **If** shared UI state appears (global confirm-modal, multi-panel layout, cross-route flags), reach for **Zustand** — UI state only, feature-scoped, no global mega-store. Never store balance values, request data, or any server-derived data in it.
+- Zustand is currently **not a dependency** — it was evaluated and deferred (see TRD §4). Add it back only when there's real UI state to hold.
 
 ### Derived State
 

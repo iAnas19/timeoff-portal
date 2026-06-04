@@ -108,8 +108,10 @@ flowchart TB
 | Concern | Tool | Rule |
 |---------|------|------|
 | Server / remote data | **TanStack Query v5** | All balances, requests, approvals; polling; mutations; cache |
-| UI chrome | **Zustand** (+ immer, devtools in dev) | Modals, tabs, panel open — **never** balances or request payloads |
+| Client UI state | **Component-local `useState`** | Form fields, selected location, dismissable banners — never server data |
 | Derived values | **useMemo** | e.g. `availableBalance = confirmed - pending` |
+
+> **On a global UI-state store (Zustand/Redux):** evaluated and **deliberately not adopted.** No genuine cross-component UI state arose — form inputs are local, and the per-cell reconciliation banners ("rolled back", "silent conflict", "refreshed") live as **entries in the Query cache** keyed per cell (so balance invalidation and dismissal flow through the same system that owns the data). If we later added a global confirm-modal, a multi-panel layout, or cross-route UI flags, Zustand (UI state only, **never** server data) would be the choice. Adding it now would be ceremony with nothing to hold.
 
 ### 4.2 Alternatives considered
 
@@ -118,7 +120,7 @@ flowchart TB
 | **Pessimistic-only UI** (wait for server before any UI change) | Rejected | Correct but feels broken for submit; poor employee UX |
 | **Redux / global store for balances** | Rejected | Duplicates HCM; reconciliation and polling become error-prone |
 | **SWR** | Rejected | We need mutation lifecycle hooks (`onMutate` / `onSettled`) as a first-class contract |
-| **Copy server data into Zustand** | Rejected | Two sources of truth; optimistic rollback harder |
+| **Zustand for UI chrome** | Deferred | No cross-component UI state arose; component-local state sufficed. Reach for it only when shared UI state actually appears — never for server data |
 
 ---
 
@@ -345,11 +347,11 @@ Tests reset MSW handlers and Query cache per test. Line coverage is a floor; **b
 | Area | Requirement |
 |------|-------------|
 | Config | `shared/config/config.ts` only reads `process.env`; fail at startup if invalid |
-| Route handlers | Mock auth check first; Zod body validation → 400; rate limit mutations |
+| Route handlers | Mock auth check first; Zod body validation → 400; **fixed-window rate limit on mutations** (POST/PATCH) → 429 |
 | Client | No tokens in `localStorage`; no employee ID or balance in URL query params |
 | Logging | No PII/balances in production console |
 | Dependencies | Pinned versions in `package.json`; `npm audit` in CI |
-| CORS | Explicit origins in staging/production (mock dev: permissive localhost) |
+| CORS | **Explicit origin allowlist** (dev app + Storybook); preflight (`OPTIONS`) handled; **no wildcard** — disallowed origins get no CORS headers |
 
 ---
 

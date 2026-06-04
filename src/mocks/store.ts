@@ -26,9 +26,13 @@ type ArmedFlags = {
 let balances: BalanceCell[] = [];
 let requests: TimeOffRequest[] = [];
 let armed: ArmedFlags = { silentFail: false, conflict: false, slow: false };
+let writeTimestamps: number[] = [];
 
 const SLOW_DELAY_MIN_MS = 6_000;
 const SLOW_DELAY_MAX_MS = 12_000;
+
+const RATE_LIMIT_MAX_WRITES = 30;
+const RATE_LIMIT_WINDOW_MS = 10_000;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -70,6 +74,32 @@ export function resetStore(): void {
   balances = structuredClone(seed.balances);
   requests = structuredClone(seed.requests);
   armed = { silentFail: false, conflict: false, slow: false };
+  writeTimestamps = [];
+}
+
+/**
+ * Fixed-window rate limit on mutating calls. Mirrors what a real HCM would do to
+ * protect itself; the window is generous enough for normal use but a tight loop
+ * will trip it. Reads are never limited (polling must stay free).
+ */
+export function enforceWriteRateLimit(): void {
+  const now = Date.now();
+  writeTimestamps = writeTimestamps.filter(
+    (timestamp) => now - timestamp < RATE_LIMIT_WINDOW_MS,
+  );
+
+  if (writeTimestamps.length >= RATE_LIMIT_MAX_WRITES) {
+    throw {
+      hcmError: createHCMError({
+        code: HCM_ERROR_CODE.UNKNOWN,
+        message: "Too many writes — slow down and retry.",
+        retryable: true,
+      }),
+      status: 429,
+    };
+  }
+
+  writeTimestamps.push(now);
 }
 
 resetStore();

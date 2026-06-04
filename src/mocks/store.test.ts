@@ -3,6 +3,7 @@ import { HCM_ERROR_CODE } from "@/shared/api/errors";
 import { HCM_API } from "@/shared/hcm/endpoints";
 import { REQUEST_STATUS } from "@/shared/hcm/constants";
 import { MOCK_AUTH_HEADERS } from "@/mocks/mswHandlers";
+import { handleHcmRequest } from "@/mocks/router";
 import { hcmServer } from "@/mocks/server";
 import {
   armConflict,
@@ -170,6 +171,23 @@ describe("mock HCM MSW handlers", () => {
     expect(body.balances).toHaveLength(3);
   });
 
+  it("rate-limits a burst of writes with HTTP 429", async () => {
+    const burst = () =>
+      handleHcmRequest(
+        new Request("http://localhost/api/hcm/simulate/silent-fail", {
+          method: "POST",
+          headers: { ...MOCK_AUTH_HEADERS, "Content-Type": "application/json" },
+          body: "{}",
+        }),
+      );
+
+    let last: Response | undefined;
+    for (let i = 0; i < 31; i += 1) {
+      last = await burst();
+    }
+    expect(last?.status).toBe(429);
+  });
+
   it("creates a pending request through MSW", async () => {
     const response = await fetch(`http://localhost${HCM_API.REQUEST.CREATE}`, {
       method: "POST",
@@ -189,5 +207,39 @@ describe("mock HCM MSW handlers", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body.status).toBe(REQUEST_STATUS.PENDING);
+  });
+});
+
+describe("mock HCM CORS", () => {
+  const ALLOWED = "http://localhost:3000";
+
+  it("answers a preflight with 204 and allow headers for an allowed origin", async () => {
+    const res = await handleHcmRequest(
+      new Request("http://localhost/api/hcm/balances/batch", {
+        method: "OPTIONS",
+        headers: { origin: ALLOWED },
+      }),
+    );
+    expect(res.status).toBe(204);
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ALLOWED);
+    expect(res.headers.get("Access-Control-Allow-Methods")).toContain("POST");
+  });
+
+  it("stamps CORS headers on a normal response for an allowed origin", async () => {
+    const res = await handleHcmRequest(
+      new Request("http://localhost/api/hcm/balances/batch", {
+        headers: { ...MOCK_AUTH_HEADERS, origin: ALLOWED },
+      }),
+    );
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBe(ALLOWED);
+  });
+
+  it("does not echo CORS for a disallowed origin", async () => {
+    const res = await handleHcmRequest(
+      new Request("http://localhost/api/hcm/balances/batch", {
+        headers: { ...MOCK_AUTH_HEADERS, origin: "http://evil.example.com" },
+      }),
+    );
+    expect(res.headers.get("Access-Control-Allow-Origin")).toBeNull();
   });
 });

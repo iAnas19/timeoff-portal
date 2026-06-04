@@ -249,12 +249,12 @@ export function RequestFormView({
           ) : null}
 
           {busy ? (
-            <p className="form-status">
+            <div className="form-status">
               <Spinner />{" "}
               {formStatus === REQUEST_FORM_STATUS.VALIDATING
                 ? "Checking…"
                 : "Submitting…"}
-            </p>
+            </div>
           ) : null}
 
           <div className="form-actions">

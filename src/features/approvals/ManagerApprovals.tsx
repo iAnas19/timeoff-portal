@@ -75,9 +75,9 @@ export function ManagerApprovalCard({
       ) : null}
 
       {status === APPROVAL_CARD_STATUS.APPROVING ? (
-        <p className="form-status">
+        <div className="form-status">
           <Spinner /> {message ?? "Processing…"}
-        </p>
+        </div>
       ) : null}
 
       {status === APPROVAL_CARD_STATUS.APPROVED ? (

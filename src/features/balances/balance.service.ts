@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { hcmGet, hcmPatch, hcmPost } from "@/shared/api/client";
+import { hcmGet, hcmPost } from "@/shared/api/client";
 import { HCM_API } from "@/shared/hcm/endpoints";
 import {
   balanceBatchResponseSchema,
@@ -7,7 +7,6 @@ import {
   employeeBalancesSchema,
   type BalanceBatchResponse,
   type BalanceCell,
-  type BalanceWriteInput,
   type EmployeeBalances,
 } from "@/shared/hcm/schemas";
 
@@ -24,18 +23,6 @@ export async function fetchBalance(
 ): Promise<BalanceCell> {
   return hcmGet(
     HCM_API.BALANCE.BY_CELL(employeeId, locationId),
-    balanceCellSchema,
-  );
-}
-
-export async function writeBalance(
-  employeeId: string,
-  locationId: string,
-  input: BalanceWriteInput,
-): Promise<BalanceCell> {
-  return hcmPost(
-    HCM_API.BALANCE.BY_CELL(employeeId, locationId),
-    input,
     balanceCellSchema,
   );
 }

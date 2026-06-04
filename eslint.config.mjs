@@ -9,6 +9,10 @@ const eslintConfig = defineConfig([
     "build/**",
     "storybook-static/**",
     "node_modules/**",
+    "coverage/**",
+    "test-results/**",
+    "playwright-report/**",
+    "public/mockServiceWorker.js",
   ]),
 ]);
 
