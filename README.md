@@ -8,6 +8,16 @@ The hard part: make balances feel **instant** but stay **honest** when the real 
 
 > **Tech:** Next.js 16 (App Router) · React 19 · TypeScript (strict) · TanStack Query v5 · Zod · MSW · Vitest · Playwright · Storybook 10.
 
+## Live demo
+
+| | Link |
+|---|---|
+| **App** (deployed) | **https://timeoff-portal.vercel.app** — open [`/employee`](https://timeoff-portal.vercel.app/employee) · [`/manager`](https://timeoff-portal.vercel.app/manager) · [`/about`](https://timeoff-portal.vercel.app/about) |
+| **Storybook** (UI-state matrix) | **https://ianas19.github.io/timeoff-portal/** |
+| **Source** (GitHub) | **https://github.com/iAnas19/timeoff-portal** |
+
+> The app is server-rendered Next.js with the mock HCM built in (no env vars). On the employee page, the **Demo scenarios** buttons trigger the interesting cases on demand. Vercel's serverless cold starts can occasionally reset the in-memory store to its seed — expected, and fully consistent when run locally.
+
 ## Quick start
 
 Requires **Node 24.14.1** (`.nvmrc`). No env vars needed — the mock HCM is built in.
@@ -54,8 +64,8 @@ Every layer the brief names is present and automated: **146 Vitest tests** (unit
 ## CI & deploy
 
 - **CI** (`.github/workflows/ci.yml`): on every push/PR — lint, typecheck, coverage, build, `npm audit` (high blocks), e2e, Storybook.
-- **App → Vercel:** import the repo at [vercel.com/new](https://vercel.com/new) → **Deploy**. It's server-rendered Next.js, so no env vars and no rewrite config are needed; nested routes reload fine. *(The in-memory mock may reset state on Vercel's serverless cold starts — it's fully consistent locally.)*
-- **Storybook → GitHub Pages:** `.github/workflows/deploy-storybook.yml` builds and publishes the static Storybook on every push. One-time: repo **Settings → Pages → Source = "GitHub Actions"**, then it's live at `https://<owner>.github.io/<repo>/` — drop the link here once it's up.
+- **App → Vercel:** live at **https://timeoff-portal.vercel.app** (auto-deploys from `master`). Server-rendered Next.js, so no env vars or rewrite config are needed; nested routes reload fine. *(The in-memory mock may reset state on Vercel's serverless cold starts — it's fully consistent locally.)*
+- **Storybook → GitHub Pages:** live at **https://ianas19.github.io/timeoff-portal/** — `.github/workflows/deploy-storybook.yml` rebuilds and publishes the static Storybook on every push to `master`.
 
 ## Docs
 
