@@ -391,8 +391,8 @@ Approved / Denied / ConflictOnApprove
 
 Rules:
 
-- Stories use MSW handlers via `msw-storybook-addon`. No hardcoded prop data for async states.
-- Every story has a `play` function that exercises at least one interaction.
+- Stories are **prop-driven**: each UI state is passed in via `args` (the views are pure presenters, so this is deterministic and needs no network). MSW powers the Vitest/Playwright layers instead — Storybook does **not** initialize MSW (that would also break a subpath deploy like GitHub Pages, where the worker script isn't at the domain root).
+- Stories with interactions carry a `play` function; they run headlessly via `@storybook/test-runner` (`npm run test-storybook`).
 - If a state has no story, it does not exist as far as the team is concerned.
 - Story files live colocated with the component: `BalanceCard.stories.tsx` next to `BalanceCard.tsx`.
 

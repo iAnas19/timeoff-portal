@@ -1,20 +1,18 @@
 import type { Preview } from "@storybook/nextjs";
-import { initialize, mswLoader } from "msw-storybook-addon";
-import { hcmHandlers } from "../src/mocks/mswHandlers";
+import "../src/app/globals.css";
 
-initialize({ onUnhandledRequest: "bypass" });
+// Stories are prop-driven (every state is passed in via args), so Storybook does
+// not need MSW at runtime — MSW powers the Vitest/Playwright layers instead.
+// Initializing the MSW service worker here would also break a subpath deploy
+// (e.g. GitHub Pages at /<repo>/), where the worker script isn't at the domain root.
 
 const preview: Preview = {
-  loaders: [mswLoader],
   parameters: {
     controls: {
       matchers: {
         color: /(background|color)$/i,
         date: /Date$/i,
       },
-    },
-    msw: {
-      handlers: hcmHandlers,
     },
   },
 };

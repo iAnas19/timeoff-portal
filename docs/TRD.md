@@ -363,6 +363,14 @@ These are conscious scope choices, not oversights. Two of them follow directly f
 core principle that **HCM owns the numbers** — the frontend doesn't reimplement policy the
 source of truth would compute.
 
+- **Language: TypeScript, which *is* JavaScript.** The brief requires the solution be
+  "developed using JavaScript." TypeScript is not a separate language — it is JavaScript with a
+  compile-time type layer that erases on build: the shipped bundle is plain JavaScript and there
+  is no TypeScript runtime. We adopt it deliberately because the failure modes this system is
+  built to prevent — silent balance drift, an unhandled `BalanceDisplayStatus`, an HCM contract
+  that changes shape underneath us — are exactly the class a type checker catches at build time
+  instead of in front of an employee or manager. Zod re-validates the same contract at runtime
+  at the one place it matters: where data crosses the network boundary from HCM.
 - **Days = inclusive calendar days, not business days.** Working-day and holiday calendars
   are per-location policy the HCM owns; the frontend deliberately doesn't reinvent (and risk
   getting wrong) what the source of truth computes.

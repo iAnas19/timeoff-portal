@@ -21,7 +21,8 @@
       "Bash(npx tsc *)",
       "Bash(sed -n '70,80p' src/features/balances/balance.utils.ts)",
       "Bash(sed -n '32,44p' src/features/requests/useSubmitRequest.ts)",
-      "Bash(node _shot.mjs)"
+      "Bash(node _shot.mjs)",
+      "Bash(grep -v \"//\")"
     ]
   }
 }
