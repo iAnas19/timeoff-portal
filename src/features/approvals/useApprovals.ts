@@ -124,18 +124,23 @@ export function useApprovals() {
         denyMutation.isError &&
         denyMutation.variables === requestId &&
         denyMutation.error;
-      const conflictError = approveError ?? denyError;
+      const decisionError = approveError ?? denyError;
 
-      if (
-        conflictError &&
-        isHCMError(conflictError) &&
-        conflictError.code === HCM_ERROR_CODE.CONFLICT
-      ) {
+      // Surface ANY HCM rejection, not just write-conflicts. INSUFFICIENT_BALANCE
+      // (the balance fell below the request between queue time and approval) used
+      // to fall through to a plain "pending" card with no message - the manager
+      // had no idea why nothing happened. Conflict gets its own state; everything
+      // else surfaces as REJECTED_ON_APPROVE with the HCM reason, buttons enabled
+      // so the manager can re-evaluate.
+      if (decisionError && isHCMError(decisionError)) {
         return {
           approval,
-          status: APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE,
+          status:
+            decisionError.code === HCM_ERROR_CODE.CONFLICT
+              ? APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE
+              : APPROVAL_CARD_STATUS.REJECTED_ON_APPROVE,
           liveAvailableBalance,
-          message: conflictError.message,
+          message: decisionError.message,
         };
       }
 

@@ -28,8 +28,14 @@ let requests: TimeOffRequest[] = [];
 let armed: ArmedFlags = { silentFail: false, conflict: false, slow: false };
 let writeTimestamps: number[] = [];
 
-const SLOW_DELAY_MIN_MS = 6_000;
-const SLOW_DELAY_MAX_MS = 12_000;
+// Kept strictly BELOW the client request timeout (config HCM_API_TIMEOUT_MS, 8s)
+// so the "slow" demo reliably exercises a sustained loading state that then
+// SUCCEEDS - matching what the UI promises. A genuine timeout-then-the-write-
+// still-landed outcome (the real honesty hazard) is reconciled on settle in
+// useSubmitRequest and covered by its own test, rather than left to a coin-flip
+// on whether the random delay happened to exceed the timeout.
+const SLOW_DELAY_MIN_MS = 3_000;
+const SLOW_DELAY_MAX_MS = 6_000;
 
 const RATE_LIMIT_MAX_WRITES = 30;
 const RATE_LIMIT_WINDOW_MS = 10_000;

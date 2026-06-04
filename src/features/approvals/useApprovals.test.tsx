@@ -12,7 +12,12 @@ import {
 } from "vitest";
 import { useApprovals } from "@/features/approvals/useApprovals";
 import { hcmServer } from "@/mocks/server";
-import { armConflict, resetStore, simulateAnniversary } from "@/mocks/store";
+import {
+  armConflict,
+  resetStore,
+  simulateAnniversary,
+  writeCell,
+} from "@/mocks/store";
 import { SEED_IDS } from "@/mocks/seed";
 import { APPROVAL_CARD_STATUS } from "@/shared/hcm/constants";
 import { BALANCE_KEYS } from "@/shared/hcm/queryKeys";
@@ -100,5 +105,28 @@ describe("useApprovals", () => {
         APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE,
       ),
     );
+  });
+
+  it("surfaces an insufficient-balance rejection on approve, never swallows it", async () => {
+    const { Wrapper } = makeWrapper();
+    const { result } = renderHook(() => useApprovals(), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.cards).toHaveLength(1));
+
+    // The balance falls below the queued request's days between queue time and
+    // the manager's approval (the seeded request needs 2 days; leave 1 available).
+    writeCell(ALICE, NYC, { confirmedBalance: 1, pendingDeductions: 0 });
+
+    act(() => result.current.approve(PENDING_REQUEST));
+
+    await waitFor(() =>
+      expect(result.current.cards[0]?.status).toBe(
+        APPROVAL_CARD_STATUS.REJECTED_ON_APPROVE,
+      ),
+    );
+    expect(result.current.cards[0]?.message).toMatch(/insufficient/i);
+    // The card stays actionable so the manager can re-evaluate rather than being
+    // left with a silent no-op.
+    expect(result.current.cards).toHaveLength(1);
   });
 });

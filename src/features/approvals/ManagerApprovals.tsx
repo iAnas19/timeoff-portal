@@ -74,6 +74,10 @@ export function ManagerApprovalCard({
         <Alert className="approval-note">{message}</Alert>
       ) : null}
 
+      {status === APPROVAL_CARD_STATUS.REJECTED_ON_APPROVE && message ? (
+        <Alert className="approval-note">{message}</Alert>
+      ) : null}
+
       {status === APPROVAL_CARD_STATUS.APPROVING ? (
         <div className="form-status">
           <Spinner /> {message ?? "Processing…"}
@@ -115,6 +119,7 @@ function approvalBadgeTone(status: ApprovalCardStatus): string {
     case APPROVAL_CARD_STATUS.PENDING_STALE_BALANCE:
       return "badge-warn";
     case APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE:
+    case APPROVAL_CARD_STATUS.REJECTED_ON_APPROVE:
     case APPROVAL_CARD_STATUS.DENIED:
       return "badge-danger";
     default:
@@ -136,6 +141,8 @@ function approvalStatusLabel(status: ApprovalCardStatus): string {
       return "Denied";
     case APPROVAL_CARD_STATUS.CONFLICT_ON_APPROVE:
       return "Conflict";
+    case APPROVAL_CARD_STATUS.REJECTED_ON_APPROVE:
+      return "Rejected";
     default:
       return status;
   }

@@ -58,7 +58,7 @@ Page (thin)
 ```
 
 - **Pages** (`src/app/`) compose containers and pass route params only. No `useQuery`, no services.
-- **Features** (`balances`, `requests`, `approvals`) do not import each other. Shared code lives in `src/shared/`.
+- **Features** (`balances`, `requests`, `approvals`) avoid cross-imports, with one sanctioned exception (per `.cursorrules`): `requests` and `approvals` reuse a few `balances` primitives (`setBalanceOverlay`, `balance.service`, `balance.utils`) because the balance cell is the shared subject of all three. Everything genuinely generic lives in `src/shared/`.
 - **Mocks** (`src/mocks/`) are first-class: seed data, scenarios, MSW handlers, shared in-memory store for API routes.
 
 ### 3.2 Diagram
@@ -213,7 +213,8 @@ Rules for implementers:
 1. Per cell, keep the **last observed `confirmedBalance`** (a ref). On the first observation, record the baseline only — never banner.
 2. When a poll reports a `confirmedBalance` that differs from the last observed value → set the **`refreshed-mid-session`** overlay (skip if an overlay is already showing, so a silent-conflict warning is not overwritten).
 3. Optimistic deductions are derived from pending mutations, so this detection works identically whether or not a submit is in flight.
-4. **Silent failure** is detected on `onSettled`: snapshot the cell in `onMutate` (read-only, no write), then after `invalidateQueries` refetches the authoritative cell, compare `refetched.pendingDeductions` to `snapshot.pendingDeductions + days`. A mismatch → **`hcm-silent-conflict`** / `SILENT_FAILURE`.
+4. **Silent failure** is detected on `onSettled` by asking the source of truth whether **our specific request** landed — look it up in the authoritative request list (by id on the 200 path; by submitted dimensions on the timeout path) rather than diffing the aggregate `pendingDeductions`. HTTP 200 but our request is absent → **`hcm-silent-conflict`** / `SILENT_FAILURE`. Keying off our own request (not an aggregate number) keeps detection correct when a **second concurrent submit** to the same cell is also bumping pending.
+5. **A write that lands despite a client timeout** is the inverse hazard and is handled in the same pass: a non-idempotent `POST` the client abandoned (timeout/network) may still have persisted. `onSettled` reconciles against the request list; if our request is there, we **upgrade the provisional rollback to success** ("reached HCM despite a slow response") instead of asserting "nothing changed". This is the brief's *"a success response can still be wrong, and a late-arriving contradiction is recoverable"* applied to its mirror image. (Explicit HCM rejections — insufficient/invalid/conflict — are unambiguous and skip this reconciliation.)
 
 ### 7.4 Alternative considered — literal poll buffer
 
@@ -272,7 +273,7 @@ Base path: `/api/hcm` (Next.js route handlers). MSW mirrors the same paths for S
 | POST | `/simulate/anniversary` | Trigger bonus for employee |
 | POST | `/simulate/silent-fail` | Arm next write: 200 but no persist |
 | POST | `/simulate/conflict` | Arm next write: 409 |
-| POST | `/simulate/slow` | Arm next request: 6–12s delay |
+| POST | `/simulate/slow` | Arm next request: 3–6s delay (kept under the client timeout) |
 
 ### 9.1 Error model (`HCMError`)
 
@@ -321,7 +322,7 @@ Each approval card receives balance status at decision time (`PendingWithFreshBa
 | Anniversary | POST `/simulate/anniversary` | Server increments balance; next poll → `refreshed-mid-session` |
 | Silent fail | POST `/simulate/silent-fail` then write | Write 200; GET unchanged → client `SILENT_FAILURE` on settle |
 | Conflict | POST `/simulate/conflict` then write | 409 `CONFLICT` |
-| Slow | POST `/simulate/slow` | 6–12s delay; loading states |
+| Slow | POST `/simulate/slow` | 3–6s delay (under the client timeout) → sustained loading, then success. A real timeout that still persisted is reconciled on settle (§7.3) |
 | Concurrent poll + mutation | Anniversary during submit | Poll writes truth; the optimistic deduction is derived on top, so they compose without clobbering (see §7.2) |
 
 Seed data: fixed `employeeId` / `locationId` values in `src/mocks/seed.ts`.

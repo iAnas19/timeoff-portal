@@ -45,7 +45,7 @@ One client (`src/shared/api/client.ts`) → a mock HCM router (`src/mocks/router
 
 ## Testing
 
-Every layer the brief names is present and automated: **143 Vitest tests** (unit, component, service-contract via MSW, container-hook), **24 Storybook interaction tests**, and **3 Playwright e2e flows** (submit→approve, anniversary mid-session, silent-fail recovery). The failure modes — silent-fail, conflict, slow/timeout, duplicate booking, and the no-retry-on-non-idempotent-write rule — each have a dedicated regression test. Coverage ≈ **96% lines / 88% branch** (the residual is defensive guards and timing-transient UI states). What each layer guards and why: **[docs/TESTING.md](docs/TESTING.md)**.
+Every layer the brief names is present and automated: **146 Vitest tests** (unit, component, service-contract via MSW, container-hook), **24 Storybook stories** (7 with `play` interaction assertions; all 24 smoke-rendered headlessly by `test-storybook`), and **3 Playwright e2e flows** (submit→approve, anniversary mid-session, silent-fail recovery). The failure modes — silent-fail, conflict, slow/timeout, **a write that lands despite a client timeout**, **a concurrent same-cell submit**, **an insufficient-balance rejection on approve**, duplicate booking, and the no-retry-on-non-idempotent-write rule — each have a dedicated regression test. Coverage ≈ **96% lines / 88% branch** (the residual is defensive guards and timing-transient UI states). What each layer guards and why: **[docs/TESTING.md](docs/TESTING.md)**.
 
 ![Coverage report](docs/images/coverage.png)
 

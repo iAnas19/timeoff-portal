@@ -53,6 +53,11 @@ export enum APPROVAL_CARD_STATUS {
   APPROVED = "approved",
   DENIED = "denied",
   CONFLICT_ON_APPROVE = "conflict-on-approve",
+  // HCM rejected the decision for a reason other than a write conflict - most
+  // importantly INSUFFICIENT_BALANCE when the balance dropped below the request
+  // between queue time and the approval (the decision-time-staleness the brief
+  // cares about). Must be surfaced, never swallowed.
+  REJECTED_ON_APPROVE = "rejected-on-approve",
 }
 
 /** Balance freshness at approval time */

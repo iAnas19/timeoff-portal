@@ -349,7 +349,7 @@ PATCH /api/hcm/requests/:requestId
 POST /api/hcm/simulate/anniversary       # fires anniversary bonus for an employee
 POST /api/hcm/simulate/silent-fail       # next write returns 200 but does not commit
 POST /api/hcm/simulate/conflict          # next write returns 409
-POST /api/hcm/simulate/slow              # next request delays 6–12 seconds
+POST /api/hcm/simulate/slow              # next request delays 3–6 seconds (under the client timeout)
 ```
 
 ### Behavior
@@ -357,7 +357,7 @@ POST /api/hcm/simulate/slow              # next request delays 6–12 seconds
 - **Anniversary bonus**: balance increments server-side. The next reconciliation poll must detect the change and trigger `refreshed-mid-session`.
 - **Silent fail**: write returns HTTP 200 with a plausible body. The subsequent GET returns the original unchanged balance. Indistinguishable from a real success at the HTTP layer — the only way to detect it is reconciliation.
 - **Conflict**: returns HTTP 409 with an `HCMError` body using the `CONFLICT` code.
-- **Slow**: random delay of 6–12 seconds. Tests timeout handling and loading states.
+- **Slow**: random delay of 3–6 seconds, deliberately under the client request timeout so it demonstrates a sustained loading state that resolves to success. The genuine timeout hazard (a write that exceeds the timeout yet still persists) is reconciled on settle in `useSubmitRequest` and covered by its own test, rather than left to chance on whether a random delay crossed the timeout.
 - Seed data is deterministic — fixed employee IDs, location IDs, and starting balances. Randomness is scenario-specific and explicitly triggered.
 - Mock handlers validate their own request bodies with the shared Zod schemas.
 

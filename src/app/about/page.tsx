@@ -27,8 +27,11 @@ export default function AboutPage() {
             changed the cell first).
           </li>
           <li>
-            <strong>Arm slow</strong> - the next request is delayed 6-12s so you can
-            see the loading/degraded state.
+            <strong>Arm slow</strong> - the next request is delayed 3-6s (under the
+            request timeout) so you can watch the sustained loading state resolve to
+            success. If a real write ever times out yet still lands server-side,
+            reconciliation on settle catches it and corrects the result rather than
+            claiming nothing changed.
           </li>
         </ul>
       </section>

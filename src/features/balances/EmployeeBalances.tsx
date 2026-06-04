@@ -232,7 +232,9 @@ function EmployeeBalancesView({
           </Button>
         </div>
         <p className="demo-panel-hint">
-          Arm a scenario, then submit a request (or wait for the 30s poll) to see it.
+          Arm a scenario, then submit a request to see it. Silent-fail and conflict
+          stay armed until your <strong>next submit</strong> intercepts them (a poll
+          won&rsquo;t); slow affects the next request. Reload to clear an armed scenario.
         </p>
       </div>
     </section>

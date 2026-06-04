@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { delay, http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import {
   afterAll,
@@ -14,12 +15,18 @@ import { useBalances } from "@/features/balances/useBalances";
 import type { BalanceCardState } from "@/features/balances/useBalances";
 import { useSubmitRequest } from "@/features/requests/useSubmitRequest";
 import { hcmServer } from "@/mocks/server";
-import { armConflict, armSilentFail, resetStore } from "@/mocks/store";
+import {
+  armConflict,
+  armSilentFail,
+  createRequest,
+  resetStore,
+} from "@/mocks/store";
 import { SEED_IDS } from "@/mocks/seed";
 import {
   BALANCE_DISPLAY_STATUS,
   REQUEST_FORM_STATUS,
 } from "@/shared/hcm/constants";
+import type { SubmitTimeOffRequestInput } from "@/shared/hcm/schemas";
 
 const ALICE = SEED_IDS.employee.alice;
 const NYC = SEED_IDS.location.nyc;
@@ -180,6 +187,73 @@ describe("useSubmitRequest", () => {
       ),
     );
     expect(result.current.submit.statusMessage).toMatch(/already covers/i);
+  });
+
+  it("does not false-flag a silent conflict when another request for the same cell persisted concurrently", async () => {
+    // Regression: reconciliation must key off OUR request landing, not an
+    // aggregate pending diff. A second submit to the same cell that persisted
+    // while ours was in flight used to push pending past `snapshot + ourDays`
+    // and falsely trip the silent-conflict warning.
+    const { result } = renderEmployeePage();
+
+    await waitFor(() =>
+      expect(nycCard(result)?.status).toBe(BALANCE_DISPLAY_STATUS.SUCCESS),
+    );
+
+    // A concurrent submit for the same cell that already persisted (non-overlapping).
+    createRequest({
+      employeeId: ALICE,
+      locationId: NYC,
+      days: 1,
+      startDate: "2026-08-10",
+      endDate: "2026-08-10",
+    });
+
+    act(() => result.current.submit.submit(VALID_REQUEST)); // 2026-08-01, 1 day
+
+    await waitFor(() =>
+      expect(result.current.submit.formStatus).toBe(
+        REQUEST_FORM_STATUS.SUBMIT_SUCCESS,
+      ),
+    );
+    expect(nycCard(result)?.status).not.toBe(
+      BALANCE_DISPLAY_STATUS.HCM_SILENT_CONFLICT,
+    );
+  });
+
+  it("reconciles to success when a write persists despite a client timeout", async () => {
+    // Honesty regression: a non-idempotent write the client abandoned (timeout)
+    // may still have landed. We must reconcile and tell the truth, not claim
+    // "nothing changed" while HCM actually created the request.
+    const { result } = renderEmployeePage();
+
+    await waitFor(() =>
+      expect(nycCard(result)?.status).toBe(BALANCE_DISPLAY_STATUS.SUCCESS),
+    );
+
+    hcmServer.use(
+      http.post("*/api/hcm/requests", async ({ request }) => {
+        const body = (await request.json()) as SubmitTimeOffRequestInput;
+        const created = createRequest(body); // server DOES persist
+        await delay(3000); // ...but answers after the 2s test-env client timeout
+        return HttpResponse.json(created);
+      }),
+    );
+
+    act(() => result.current.submit.submit(VALID_REQUEST));
+
+    await waitFor(
+      () =>
+        expect(result.current.submit.formStatus).toBe(
+          REQUEST_FORM_STATUS.SUBMIT_SUCCESS,
+        ),
+      { timeout: 4000 },
+    );
+    expect(result.current.submit.statusMessage).toMatch(/despite a slow response/i);
+    await waitFor(() =>
+      // seed pending 2 + 1 requested = 3, reflected after reconciliation
+      expect(nycCard(result)?.pendingDeductions).toBe(3),
+    );
   });
 
   it("rejects invalid client input before any network call", async () => {
