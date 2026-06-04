@@ -110,7 +110,7 @@ const configSchema = z.object({
 export const config = configSchema.parse(process.env);
 ```
 
-- If a required variable is missing or the wrong shape, the app throws on startup — not at runtime in a component.
+- The wrong *shape* (e.g. a malformed URL) throws on startup — not at runtime in a component. Genuinely-required secrets/external config also throw when missing. A var that has a safe local default (e.g. the co-located mock `HCM_API_URL`) defaults instead of failing the build, so CI/prerender works without a `.env`.
 - Never access `process.env.ANYTHING` outside of `config.ts`.
 - Never expose server-only variables to the client. Client-safe variables must be prefixed `NEXT_PUBLIC_`.
 - Import `config` wherever you need an env value. Never pass env values down as props.

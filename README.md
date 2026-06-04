@@ -92,8 +92,8 @@ The app is server-rendered Next.js, so **Vercel** is the natural host (it runs t
 Router pages **and** the `/api/hcm/*` route handlers).
 
 1. Import the repo at [vercel.com/new](https://vercel.com/new) — Vercel auto-detects Next.js (no `vercel.json` needed).
-2. Set environment variables (from `.env.example`): `HCM_API_URL` (any valid URL — the browser uses relative paths, this is a server-side placeholder), `NEXT_PUBLIC_APP_ENV=production`.
-3. Deploy. `/`, `/employee`, `/manager` all work on reload — **no rewrite config is required**. (The "nested route 404 on reload" problem only affects *static SPA* hosts; it does not apply to Next.js on Vercel.)
+2. Click **Deploy**. No environment variables are required — the mock HCM is co-located and the config self-defaults (`HCM_API_URL` is a placeholder; the browser uses relative paths). Set `HCM_API_URL` only if you ever point it at a real HCM.
+3. `/`, `/employee`, `/manager` all work on reload — **no rewrite config is required**. (The "nested route 404 on reload" problem only affects *static SPA* hosts; it does not apply to Next.js on Vercel.)
 
 > **Demo caveat:** the mock HCM uses an in-memory store. On Vercel's serverless functions
 > that state is per-instance and resets on cold starts, so a deployed demo may occasionally

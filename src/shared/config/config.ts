@@ -17,15 +17,14 @@ const configSchema = z.object({
 export type AppConfig = z.infer<typeof configSchema>;
 
 /**
- * Server-only vars (HCM_API_URL) are not inlined in the browser bundle.
- * On the client, hcmFetch uses relative paths — HCM_API_URL is a parse placeholder only.
- * Server startup still requires HCM_API_URL in .env.
+ * The mock HCM is co-located (`/api/hcm`) and the browser talks to it with relative
+ * paths, so `HCM_API_URL` is a placeholder that defaults to the local mock — the build
+ * must not hard-fail when it is unset (CI / Vercel prerender `/employee` without a .env).
+ * The schema still validates the *shape* if a value is provided. Point it at a real HCM
+ * by setting `HCM_API_URL` explicitly; in that case a deploy would reinstate strict checks.
  */
-const isBrowser = typeof window !== "undefined";
-
 export const config: AppConfig = configSchema.parse({
-  HCM_API_URL:
-    process.env.HCM_API_URL ?? (isBrowser ? DEFAULT_HCM_API_URL : undefined),
+  HCM_API_URL: process.env.HCM_API_URL ?? DEFAULT_HCM_API_URL,
   HCM_API_TIMEOUT_MS:
     process.env.HCM_API_TIMEOUT_MS ??
     process.env.NEXT_PUBLIC_HCM_API_TIMEOUT_MS,
